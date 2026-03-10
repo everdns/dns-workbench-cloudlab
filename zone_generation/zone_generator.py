@@ -1,0 +1,169 @@
+import ipaddress
+import os
+import random
+import string
+import math
+
+HEADER = """$TTL 3600
+@   IN  SOA ns1.workbench.lan. admin.workbench.lan. (
+            2026010701 ; serial (YYYYMMDDnn)
+            3600       ; refresh
+            1800       ; retry
+            604800     ; expire
+            3600 )     ; minimum
+
+    IN  NS  ns1.workbench.lan.
+ns1     IN  A 10.10.1.2
+"""
+SLD = "workbench.lan"
+BASE_SUBNET = "10.0.0.0"
+BASE_SUBNET_FILE_STR = BASE_SUBNET.replace('.', '-')
+NUM_RECORDS = 16777216 
+MAX_RECORDS_PER_FILE = 65536
+NUM_IPS = 16777216 
+OUT_DIR = "output"
+if not os.path.exists(OUT_DIR):
+    os.makedirs(OUT_DIR)
+
+RECORD_WEIGHTS = {
+    'A': 63,
+    'AAAA': 20,
+    'HTTPS': 8,
+    'CNAME': 2,
+    'MX': 2,
+}    
+
+def generate_interleaved_record_types_pattern(record_counts, types_order):
+    record_types = []
+    # Cycle through all types repeatedly until lighter types are exhausted
+    while any(count > 0 for count in record_counts.values()):
+        for rtype in types_order:
+            if record_counts[rtype] > 0:
+                record_types.append(rtype)
+                record_counts[rtype] -= 1
+    return record_types
+
+def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet: str, out_dir: str, max_records_per_file: int):
+    types_order = list(RECORD_WEIGHTS.keys())
+
+    # Parse the base subnet to get the starting IP
+    network = ipaddress.ip_network(base_subnet, strict=False)
+    start_ip = network.network_address
+
+    # Calculate total weight and record counts per type
+    total_weight = sum(RECORD_WEIGHTS.values())
+    iters_through_main_record_pattern = num_records // total_weight
+    remaining_records_count = num_records % total_weight
+    remaining_record_counts = {rtype: int((RECORD_WEIGHTS[rtype] / total_weight) * remaining_records_count) for rtype in RECORD_WEIGHTS}
+
+    if sum(remaining_record_counts.values()) < remaining_records_count:
+        # If due to rounding we have fewer records than needed, add the remaining ones to the most common type
+        remaining_record_counts['A'] += remaining_records_count - sum(remaining_record_counts.values())
+
+    primary_pattern = generate_interleaved_record_types_pattern(dict.copy(RECORD_WEIGHTS), types_order)
+    remaining_pattern = generate_interleaved_record_types_pattern(remaining_record_counts, types_order)
+    main_pattern_record_count = iters_through_main_record_pattern * len(primary_pattern)
+
+    # Calculate file boundaries
+    num_files = math.ceil(num_records / max_records_per_file)
+
+    dnsperf_file = open(os.path.join(out_dir, f"dnsperf_input_{BASE_SUBNET_FILE_STR}_{num_records}"), 'w')
+
+    try:
+        file_idx = 0
+        file_record_count = 0
+        zone_file = None
+        cur_pattern = primary_pattern
+        pattern_idx = 0
+
+        # Generate records and write to files
+        for i in range(num_records):
+            # Open new zone file if needed
+            if file_record_count == 0:
+                if zone_file:
+                    zone_file.close()
+                filename = f"zone_file_{BASE_SUBNET_FILE_STR}_p{file_idx}"
+                zone_file = open(os.path.join(out_dir, filename), 'w')
+                zone_file.write(HEADER)
+
+            ip_index = i % num_ips + 1  # +1 to avoid using the network address (first IP)
+            ip_addr = start_ip + ip_index
+
+            # Create FQDN: ip-addr.sld (zero-padded octets with dashes)
+            octets = str(ip_addr).split('.')
+            padded_octets = '-'.join(f"{int(octet):03d}" for octet in octets)
+            fqdn = f"{padded_octets}.{sld}"
+
+            # Determine which pattern to use
+            if i == main_pattern_record_count:
+                cur_pattern = remaining_pattern
+                pattern_idx = 0
+            elif pattern_idx >= len(cur_pattern):
+                pattern_idx = 0
+            record_type = cur_pattern[pattern_idx]
+            pattern_idx += 1
+
+            # Generate record data based on type
+            if record_type == 'A':
+                data = str(ip_addr)
+                entry = get_zone_file_entry(fqdn, data, 'A')
+            elif record_type == 'AAAA':
+                # Generate IPv6 address from IPv4 address (RFC 6052 format)
+                octets = str(ip_addr).split('.')
+                hex_bytes = ''.join(f'{int(octet):02x}' for octet in octets)
+                ipv6_suffix = f"{hex_bytes[0:4]}:{hex_bytes[4:8]}"
+                ipv6_addr = ipaddress.ip_address(f"2001:db8::{ipv6_suffix}")
+                entry = get_zone_file_entry(fqdn, str(ipv6_addr), 'AAAA')
+            elif record_type == 'MX':
+                priority = 10 + (i % 10)
+                mail_server = f"mail{i % 10}.{sld}"
+                entry = get_zone_file_entry(fqdn, (priority, mail_server), 'MX')
+            elif record_type == 'HTTPS':
+                priority = 1
+                alpn = "h2,h3"
+                entry = get_zone_file_entry(fqdn, (priority, alpn), 'HTTPS')
+            elif record_type == 'CNAME':
+                target_fqdn = f"canonical-{padded_octets}.{sld}"
+                entry = get_zone_file_entry(fqdn, target_fqdn, 'CNAME')
+
+            # Write to zone file
+            zone_file.write(entry)
+            file_record_count += 1
+
+            # Write to dnsperf file
+            dnsperf_file.write(get_dnsperf_entry(fqdn, record_type))
+
+            # Move to next zone file if current one is full
+            if file_record_count >= max_records_per_file and file_idx < num_files - 1:
+                file_idx += 1
+                file_record_count = 0
+
+    finally:
+        if zone_file:
+            zone_file.close()
+        dnsperf_file.close()
+
+    return num_files
+
+def get_dnsperf_entry(fqdn, record_type='A'):
+    return f"{fqdn}.  {record_type}\n"
+
+def get_zone_file_entry(fqdn, data, record_type='A'):
+    if record_type == 'A':
+        return f"{fqdn}.  IN  A  {data}\n"
+    elif record_type == 'AAAA':
+        return f"{fqdn}.  IN  AAAA  {data}\n"
+    elif record_type == 'MX':
+        priority, mail_server = data
+        return f"{fqdn}.  IN  MX  {priority} {mail_server}.\n"
+    elif record_type == 'HTTPS':
+        priority, alpn = data
+        return f"{fqdn}.  IN  HTTPS  {priority} . alpn=\"{alpn}\"\n"
+    elif record_type == 'CNAME':
+        return f"{fqdn}.  IN  CNAME  {data}.\n"
+    else:
+        return f"{fqdn}.  IN  {record_type}  {data}\n"
+
+if __name__ == "__main__":
+    num_files = generate_fqdns_and_ips(NUM_IPS, NUM_RECORDS, SLD, BASE_SUBNET, OUT_DIR, MAX_RECORDS_PER_FILE)
+    print(f"Created {NUM_RECORDS} domain/ip pairs across {num_files} zone file(s)")

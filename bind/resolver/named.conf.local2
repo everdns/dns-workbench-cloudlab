@@ -1,0 +1,11 @@
+zone "workbench.lan" IN {
+    type forward;
+    forward only;
+    forwarders { 10.10.2.2; };
+};
+
+zone "dns64perf.test" IN {
+    type forward;
+    forward only;
+    forwarders { 10.10.2.2; };
+};

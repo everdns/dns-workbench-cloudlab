@@ -1,0 +1,9 @@
+zone "workbench.lan" IN {
+    type master;
+    file "/etc/bind/db.workbench.lan";
+};
+
+zone "dns64perf.test" IN {
+    type master;
+    file "/etc/bind/db.dns64perf.test";
+};

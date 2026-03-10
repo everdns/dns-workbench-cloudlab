@@ -1,0 +1,9 @@
+options {
+    directory "/var/cache/bind";
+    recursion yes;
+    listen-on { 10.10.1.1; 127.0.0.1; };
+    allow-query { any; };
+    validate-except { workbench.lan; dns64perf.test; };
+    dnssec-validation auto;
+    auth-nxdomain yes;
+};
