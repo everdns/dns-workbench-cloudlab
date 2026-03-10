@@ -1,4 +1,4 @@
-zone "wi.lan" IN {
+zone "workbench.lan" IN {
     type forward;
     forward only;
     forwarders { 10.10.1.2; };
