@@ -85,7 +85,7 @@ if params.resolver_software == "bind":
         node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.local /etc/bind/named.conf.local'))
     node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl restart bind9'))
 else:
-    node_Resolver.addService(pg.Execute('/bin/sh','sudo echo "None selected or Resolver software installation not implemented yet" > /opt/resolver_software_selection.txt'))
+    node_Resolver.addService(pg.Execute('/bin/sh','sudo echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
 
 if params.name_server_software == "bind":
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo apt install bind9 bind9-utils bind9-dnsutils -y'))
