@@ -84,7 +84,7 @@ if params.resolver_software == "bind":
     else:
         #copy bind files resolver
         node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.local /etc/bind/named.conf.local'))
-    node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl restart bind9'))
+    node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl start bind9'))
 #PowerDNS Resolver
 elif params.resolver_software == "powerdns":
     node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh'))
@@ -111,7 +111,7 @@ if params.name_server_software == "bind":
     #Populate default zone files
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/bind/db.workbench.lan.'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/bind/db.dns64perf.test'))
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl restart bind9'))
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl start bind9'))
 #PowerDNS Name Server
 elif params.name_server_software == "powerdns":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh'))
