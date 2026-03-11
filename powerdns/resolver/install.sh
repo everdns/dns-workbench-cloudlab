@@ -3,5 +3,5 @@ printf "Package: pdns-*\nPin: origin repo.powerdns.com\nPin-Priority: 600\n" | s
 sudo install -d /etc/apt/keyrings; curl https://repo.powerdns.com/FD380FBB-pub.asc | sudo tee /etc/apt/keyrings/rec-54-pub.asc
 sudo apt-get update 
 sudo systemctl mask pdns-recursor
-sudo apt-get install pdns-recursor
+sudo apt-get install pdns-recursor -y
 sudo systemctl unmask pdns-recursor
