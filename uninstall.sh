@@ -11,6 +11,4 @@ for pkg in bind9 bind9-utils bind9-dnsutils pdns-server pdns-recursor; do
     fi
 done
 
-sudo apt-get autoremove -y
-
 echo "Done."
