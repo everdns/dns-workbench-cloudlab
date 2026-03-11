@@ -3,11 +3,7 @@ network:
     - interface: 10.10.1.1@53
     - interface: 127.0.0.1@53
 dnssec:
-  trust-anchors:
-    - auto-update: true
-  negative-trust-anchors:
-    - workbench.lan
-    - dns64perf.test
+  enable: false
 forward:
   - subtree: workbench.lan.
     options:
