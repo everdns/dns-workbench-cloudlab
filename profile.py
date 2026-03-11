@@ -77,21 +77,21 @@ else:
 #Bind Resolver
 if params.resolver_software == "bind":
     if params.multiple_resolver_iface:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/bind/resolver/install.sh true'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh true'))
     else:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/bind/resolver/install.sh false'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh false'))
 #PowerDNS Resolver
 elif params.resolver_software == "powerdns-recursor":
     if params.multiple_resolver_iface:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/powerdns/resolver/install.sh true'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh true'))
     else:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/powerdns/resolver/install.sh false'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh false'))
 #Knot Resolver
 elif params.resolver_software == "knot-resolver":
     if params.multiple_resolver_iface:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/knot/resolver/install.sh true'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh true'))
     else:
-        node_Resolver.addService(pg.Execute('sh','sudo /local/repository/knot/resolver/install.sh false'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh false'))
 #None or unimplemented resolver software
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
@@ -99,26 +99,26 @@ else:
 #Bind Name Server
 if params.name_server_software == "bind":
     if params.multiple_resolver_iface:
-        node_NS_Local.addService(pg.Execute('sh','sudo /local/repository/bind/ns/install.sh true'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh true'))
     else:
-        node_NS_Local.addService(pg.Execute('sh','sudo /local/repository/bind/ns/install.sh false'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh false'))
 #PowerDNS Name Server
 elif params.name_server_software == "powerdns-authoritative-server":
     if params.multiple_resolver_iface:
-        node_NS_Local.addService(pg.Execute('sh','sudo /local/repository/powerdns/ns/install.sh true'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh true'))
     else:
-        node_NS_Local.addService(pg.Execute('sh','sudo /local/repository/powerdns/ns/install.sh false'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh false'))
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
 
 #Try to install collectl for monitoring on both resolver and name server
-node_NS_Local.addService(pg.Execute('sh','sudo /local/repository/install_collectl.sh'))
-node_Resolver.addService(pg.Execute('sh','sudo /local/repository/install_collectl.sh'))
+node_NS_Local.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
+node_Resolver.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
 
 for i in range(params.num_testers):
     node = request.RawPC("test_host_" + str(i))
-    node.addService(pg.Execute('sh','sudo /local/repository/load_tester/install.sh true'))
+    node.addService(pg.Execute('sh','/local/repository/load_tester/install.sh true'))
     iface = node.addInterface("interface-tester" + str(i), pg.IPv4Address(str(next_ip),TEST_HOST_SUBNET_MASK))
     next_ip += 1
     iface.bandwidth = 10000000
