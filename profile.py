@@ -19,8 +19,8 @@ pc = portal.Context()
 # Describe the parameter(s) this profile script can accept.
 pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INTEGER, 1 )
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
-pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "bind", ["bind", "powerdns", "unbound", "knotdns", "nsd", "none"])
-pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "bind", ["bind", "powerdns", "unbound", "knotdns", "nsd", "none"])
+pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns", "unbound", "knotdns", "nsd", "none"])
+pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns", "unbound", "knotdns", "nsd", "none"])
 
 # Create a Request object to start building the RSpec.
 request = pc.makeRequestRSpec()
@@ -74,8 +74,9 @@ else:
     iface_ns.bandwidth = 10000000
     main_link.addInterface(iface_ns)
 
+#Bind Resolver
 if params.resolver_software == "bind":
-    node_Resolver.addService(pg.Execute('/bin/sh','sudo apt install bind9 bind9-utils bind9-dnsutils -y'))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
     node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.options /etc/bind/named.conf.options'))
     if params.multiple_resolver_iface:
         #copy bind files resolver
@@ -84,11 +85,21 @@ if params.resolver_software == "bind":
         #copy bind files resolver
         node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.local /etc/bind/named.conf.local'))
     node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl restart bind9'))
+#PowerDNS Resolver
+elif params.resolver_software == "powerdns":
+    node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh'))
+    if params.multiple_resolver_iface:
+        node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/powerdns/resolver/recursor2.conf /etc/powerdns/recursor.conf'))
+    else:
+        node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/powerdns/resolver/recursor.conf /etc/powerdns/recursor.conf'))
+    node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable pdns-recursor && sudo systemctl start pdns-recursor'))
+
+#None or unimplemented resolver software
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','sudo echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
 
 if params.name_server_software == "bind":
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo apt install bind9 bind9-utils bind9-dnsutils -y'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.local /etc/bind/named.conf.local'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/db.wi.lan /etc/bind/db.wi.lan'))
     if params.multiple_resolver_iface:
@@ -102,8 +113,8 @@ else:
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
 
 #Try to install collectl for monitoring on both resolver and name server
-node_NS_Local.addService(pg.Execute('/bin/sh','sudo DEBIAN_FRONTEND=noninteractive apt-get install -y collectl'))
-node_Resolver.addService(pg.Execute('/bin/sh','sudo DEBIAN_FRONTEND=noninteractive apt-get install -y collectl'))
+node_NS_Local.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
+node_Resolver.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
 
 for i in range(params.num_testers):
     node = request.RawPC("test_host_" + str(i))
