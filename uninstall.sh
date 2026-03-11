@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Uninstall bind9, pdns-server, and pdns-recursor if installed
+# Uninstall dns software that is installed
 
-for pkg in bind9 bind9-utils bind9-dnsutils pdns-server pdns-recursor; do
+for pkg in bind9 bind9-utils bind9-dnsutils pdns-server pdns-recursor knot-resolver6; do
     if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
         echo "Removing $pkg..."
         sudo apt-get remove --purge "$pkg" -y
