@@ -101,7 +101,6 @@ else:
 if params.name_server_software == "bind":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.local /etc/bind/named.conf.local'))
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/db.wi.lan /etc/bind/db.wi.lan'))
     if params.multiple_resolver_iface:
         #copy bind files name server
         node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.options2 /etc/bind/named.conf.options'))
