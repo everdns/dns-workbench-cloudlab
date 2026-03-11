@@ -11,8 +11,11 @@ dnssec:
   negative_trust_anchors:
     - workbench.lan
     - dns64perf.test
+  trustanchorfile: /usr/share/dns/root.key
 
 recursor:
+  hint_file: /usr/share/dns/root.hints
+  include_dir: /etc/powerdns/recursor.d
   forward_zones:
     - zone: workbench.lan
       forwarders:
