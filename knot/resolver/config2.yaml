@@ -1,0 +1,23 @@
+network:
+  listen:
+    - interface: 10.10.1.1@53
+    - interface: 127.0.0.1@53
+dnssec:
+  trust-anchors:
+    - auto-update: true
+  negative-trust-anchors:
+    - workbench.lan
+    - dns64perf.test
+forward:
+  - subtree: workbench.lan.
+    options:
+      authoritative: false
+    servers:
+      - address:
+          - 10.10.2.2@53
+  - subtree: dns64perf.test.
+    options:
+      authoritative: false
+    servers:
+      - address:
+          - 10.10.2.2@53
