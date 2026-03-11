@@ -76,15 +76,10 @@ else:
 
 #Bind Resolver
 if params.resolver_software == "bind":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
-    node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.options /etc/bind/named.conf.options'))
     if params.multiple_resolver_iface:
-        #copy bind files resolver
-        node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.local2 /etc/bind/named.conf.local'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh true'))
     else:
-        #copy bind files resolver
-        node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/resolver/named.conf.local /etc/bind/named.conf.local'))
-    node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable named && sudo systemctl start named'))
+        node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh false'))
 #PowerDNS Resolver
 elif params.resolver_software == "powerdns-recursor":
     node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh'))
@@ -101,25 +96,16 @@ elif params.resolver_software == "knot-resolver":
     else:
         node_Resolver.addService(pg.Execute('/bin/sh','sudo cp /local/repository/knot/resolver/config.yaml /etc/knot-resolver/config.yaml'))
     node_Resolver.addService(pg.Execute('/bin/sh','sudo systemctl enable knot-resolver && sudo systemctl start knot-resolver'))
-
 #None or unimplemented resolver software
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
 
 #Bind Name Server
 if params.name_server_software == "bind":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.local /etc/bind/named.conf.local'))
     if params.multiple_resolver_iface:
-        #copy bind files name server
-        node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.options2 /etc/bind/named.conf.options'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh true'))
     else:
-        #copy bind files name server
-        node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.options /etc/bind/named.conf.options'))
-    #Populate default zone files
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/bind/db.workbench.lan.'))
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/bind/db.dns64perf.test'))
-    node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable named && sudo systemctl start named'))
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/install.sh false'))
 #PowerDNS Name Server
 elif params.name_server_software == "powerdns-authoritative-server":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh'))
@@ -132,7 +118,6 @@ elif params.name_server_software == "powerdns-authoritative-server":
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/powerdns/db.workbench.lan.'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/powerdns/db.dns64perf.test'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable pdns && sudo systemctl start pdns'))
-
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
