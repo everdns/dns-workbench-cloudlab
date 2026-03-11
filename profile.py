@@ -128,27 +128,7 @@ node_Resolver.addService(pg.Execute('sh','/local/repository/install_collectl.sh'
 
 for i in range(params.num_testers):
     node = request.RawPC("test_host_" + str(i))
-    node.addService(pg.Execute('/bin/sh','echo \'export PATH=$PATH:/opt/go/bin\' | sudo tee /etc/profile.d/go_path.sh && sudo chmod +x /etc/profile.d/go_path.sh'))
-    node.addService(pg.Execute('/bin/sh','sudo add-apt-repository ppa:longsleep/golang-backports'))
-    node.addService(pg.Execute('/bin/sh','sudo apt update && sudo apt upgrade -y'))
-    node.addService(pg.Execute('/bin/sh','sudo apt install golang -y'))
-    node.addService(pg.Execute('/bin/sh','sudo mkdir -p /opt/go && sudo chown -R $USER /opt/go'))
-    node.addService(pg.Execute('/bin/sh','GOPATH=/opt/go PATH=$PATH:/opt/go/bin go install github.com/tantalor93/dnspyre/v3@latest'))
-    node.addService(pg.Execute('/bin/sh','GOPATH=/opt/go PATH=$PATH:/opt/go/bin go install github.com/everdns/dnspyre-dnsworkbench@latest'))
-    node.addService(pg.Execute('/bin/sh','sudo apt install -y autoconf automake libtool  libssl-dev libldns-dev libck-dev libnghttp2-dev'))
-    node.addService(pg.Execute('/bin/sh','sudo git clone https://codeberg.org/DNS-OARC/dnsperf.git /opt/dnsperf'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dnsperf && sudo ./autogen.sh && sudo ./configure'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dnsperf && sudo make && sudo make install'))
-    node.addService(pg.Execute('/bin/sh','sudo git clone https://github.com/everdns/dnsperf-dnsworkbench.git /opt/dnsperf-dnsworkbench'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dnsperf-dnsworkbench && sudo ./autogen.sh && sudo ./configure'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dnsperf-dnsworkbench && sudo make && sudo make install'))
-    node.addService(pg.Execute('/bin/sh','sudo apt install -y gcc g++'))
-    node.addService(pg.Execute('/bin/sh','sudo apt install -y clang'))
-    node.addService(pg.Execute('/bin/sh','sudo git clone https://github.com/everdns/dns64perfpp-dnsworkbench.git /opt/dns64perfpp-dnsworkbench'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dns64perfpp-dnsworkbench && sudo make CXXFLAGS+=" -DDNS64PERFPP_IPV4" && sudo make install'))
-    node.addService(pg.Execute('/bin/sh','sudo git clone https://github.com/everdns/dns64perfpp-dnsworkbench.git /opt/dns64perfpp'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dns64perfpp && sudo git checkout original_feature/multiport'))
-    node.addService(pg.Execute('/bin/sh','cd /opt/dns64perfpp && sudo make CXXFLAGS+=" -DDNS64PERFPP_IPV4" && sudo make install'))
+    node.addService(pg.Execute('sh','/local/repository/load_tester/install.sh true'))
     iface = node.addInterface("interface-tester" + str(i), pg.IPv4Address(str(next_ip),TEST_HOST_SUBNET_MASK))
     next_ip += 1
     iface.bandwidth = 10000000
