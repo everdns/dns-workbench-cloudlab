@@ -98,6 +98,7 @@ elif params.resolver_software == "powerdns":
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','sudo echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
 
+#Bind Name Server
 if params.name_server_software == "bind":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/install.sh'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.local /etc/bind/named.conf.local'))
@@ -107,7 +108,24 @@ if params.name_server_software == "bind":
     else:
         #copy bind files name server
         node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/bind/ns/named.conf.options /etc/bind/named.conf.options'))
+    #Populate default zone files
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/bind/db.workbench.lan.'))
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/bind/db.dns64perf.test'))
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable bind9 && sudo systemctl restart bind9'))
+#PowerDNS Name Server
+elif params.name_server_software == "powerdns":
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh'))
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/powerdns/ns/named.conf /etc/powerdns/named.conf'))
+    if params.multiple_resolver_iface:
+        node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/powerdns/ns/pdns.conf /etc/powerdns/pdns.conf'))
+    else:
+        node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/powerdns/ns/pdns2.conf /etc/powerdns/pdns.conf'))
+    #Populate default zone files
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/powerdns/db.workbench.lan.'))
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/powerdns/db.dns64perf.test'))
+    node_NS_Local.addService(pg.Execute('/bin/sh','sudo systemctl enable pdns && sudo systemctl start pdns'))
+
+#None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','sudo echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
 
