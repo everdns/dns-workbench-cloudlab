@@ -1,0 +1,22 @@
+incoming:
+  listen:
+    - 10.10.1.1
+    - 127.0.0.1
+  allow_from:
+    - 0.0.0.0/0
+    - ::/0
+
+dnssec:
+  validation: validate
+  negative_trust_anchors:
+    - workbench.lan
+    - dns64perf.test
+
+recursor:
+  forward_zones:
+    - zone: workbench.lan
+      forwarders:
+        - 10.10.1.2
+    - zone: dns64perf.test
+      forwarders:
+        - 10.10.1.2
