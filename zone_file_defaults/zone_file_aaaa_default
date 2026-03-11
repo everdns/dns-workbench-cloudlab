@@ -1,0 +1,13 @@
+$TTL 3600
+@   IN  SOA ns1.dns64perf.test. admin.dns64perf.test. (
+            2026010701 ; serial (YYYYMMDDnn)
+            3600       ; refresh
+            1800       ; retry
+            604800     ; expire
+            3600 )     ; minimum
+
+    IN  NS  ns1.dns64perf.test.
+ns1     IN  A   10.10.1.2
+
+010-000-000-000.dns64perf.test. IN AAAA 64:ff9b::0a00:0000
+010-000-000-001.dns64perf.test. IN AAAA 64:ff9b::0a00:0001
