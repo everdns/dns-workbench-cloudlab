@@ -21,7 +21,7 @@ pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INT
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
 pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "nsd", "none"])
 pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "unbound", "knotdns", "nsd", "none"])
-
+pc.defineParameter("allow_interswitch_links", "Allow Interswitch Links", portal.ParameterType.BOOLEAN, False)
 # Create a Request object to start building the RSpec.
 request = pc.makeRequestRSpec()
 
@@ -48,7 +48,8 @@ node_NS_Local.addService(pg.Execute('/bin/sh','sudo ufw allow 53/tcp && sudo ufw
 
 #Network
 main_link = request.Link('main_link')
-main_link.setNoInterSwitchLinks()
+if not params.allow_interswitch_links:
+    main_link.setNoInterSwitchLinks()
 main_link.Site('undefined')
 iface_resolver1.bandwidth = 10000000
 main_link.addInterface(iface_resolver1)
@@ -59,7 +60,8 @@ if params.multiple_resolver_iface:
     ns_ip = str(AS_SUBNET_BASE_IP + 1)
     iface_ns = node_NS_Local.addInterface('interface-ns', pg.IPv4Address(ns_ip, AS_SUBNET_MASK))
     link_ns = request.Link('link_ns')
-    link_ns.setNoInterSwitchLinks()
+    if not params.allow_interswitch_links:
+        link_ns.setNoInterSwitchLinks()
     link_ns.Site('undefined')
     iface_resolver2.bandwidth = 10000000
     link_ns.addInterface(iface_resolver2)
