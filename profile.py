@@ -39,14 +39,12 @@ resolver_base_ip = str(next_ip)
 next_ip += 1
 iface_resolver1 = node_Resolver.addInterface('interface-resolver1', pg.IPv4Address(resolver_base_ip,TEST_HOST_SUBNET_MASK))
 node_Resolver.addService(pg.Execute('/bin/sh','sudo apt update && sudo apt upgrade -y'))
-node_Resolver.addService(pg.Execute('/bin/sh','sudo ufw allow dns'))
-node_Resolver.addService(pg.Execute('/bin/sh','sudo ufw allow 853/tcp && sudo ufw allow 443/tcp'))
+node_Resolver.addService(pg.Execute('/bin/sh','sudo ufw allow 53/tcp && sudo ufw allow 53/udp && sudo ufw allow 853/tcp && sudo ufw allow 443/tcp'))
 
 # Node NS_Local
 node_NS_Local = request.RawPC('NS_Local')
 node_NS_Local.addService(pg.Execute('/bin/sh','sudo apt update && sudo apt upgrade -y'))
-node_NS_Local.addService(pg.Execute('/bin/sh','sudo ufw allow dns'))
-node_NS_Local.addService(pg.Execute('/bin/sh','sudo ufw allow 853/tcp && sudo ufw allow 443/tcp'))
+node_NS_Local.addService(pg.Execute('/bin/sh','sudo ufw allow 53/tcp && sudo ufw allow 53/udp && sudo ufw allow 853/tcp && sudo ufw allow 443/tcp'))
 
 #Network
 main_link = request.Link('main_link')

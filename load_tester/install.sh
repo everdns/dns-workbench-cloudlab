@@ -1,6 +1,6 @@
 #!/bin/sh
-echo \'export PATH=$PATH:/opt/go/bin\' | sudo tee /etc/profile.d/go_path.sh && sudo chmod +x /etc/profile.d/go_path.sh
-sudo add-apt-repository ppa:longsleep/golang-backports
+echo 'export PATH=$PATH:/opt/go/bin' | sudo tee /etc/profile.d/go_path.sh && sudo chmod +x /etc/profile.d/go_path.sh
+sudo add-apt-repository ppa:longsleep/golang-backports -y
 sudo apt update && sudo apt upgrade -y
 sudo apt install golang -y
 sudo mkdir -p /opt/go && sudo chown -R $USER /opt/go
