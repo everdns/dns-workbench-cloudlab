@@ -19,7 +19,7 @@ pc = portal.Context()
 # Describe the parameter(s) this profile script can accept.
 pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INTEGER, 1 )
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
-pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "nsd", "none"])
+pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "none"])
 pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "unbound", "knotdns", "nsd", "none"])
 pc.defineParameter("allow_interswitch_links", "Allow Interswitch Links", portal.ParameterType.BOOLEAN, False)
 # Create a Request object to start building the RSpec.
@@ -108,6 +108,12 @@ elif params.name_server_software == "powerdns-authoritative-server":
         node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh true'))
     else:
         node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh false'))
+#KnotDNS Name Server
+elif params.name_server_software == "knotdns":
+    if params.multiple_resolver_iface:
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh true'))
+    else:
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh false'))
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
