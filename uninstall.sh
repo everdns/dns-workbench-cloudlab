@@ -9,6 +9,12 @@ for svc in named pdns pdns-recursor knot-resolver knot; do
         sudo systemctl stop "$svc"
     fi
 done
+sudo pkill nsd
+
+# Remove nsd files installed by nsd/ns/install.sh
+sudo make -C /opt/nsd-4.14.1 uninstall 2>/dev/null
+sudo rm -f /usr/local/sbin/nsd /usr/local/sbin/nsd-checkconf /usr/local/sbin/nsd-checkzone /usr/local/sbin/nsd-control
+sudo rm -rf /opt/nsd-4.14.1.tar.gz /opt/nsd-4.14.1 /etc/nsd /var/run /var/db/nsd/xfrd.state /var/db/nsd/zone.list /var/db/nsd/cookiesecrets.txt
 
 for pkg in bind9 bind9-utils bind9-dnsutils pdns-server pdns-recursor knot-resolver6 knot; do
     if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
