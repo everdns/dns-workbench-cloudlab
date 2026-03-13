@@ -10,6 +10,7 @@ for svc in named pdns pdns-recursor knot-resolver knot; do
     fi
 done
 sudo pkill nsd
+sudo pkill unbound
 
 # Remove nsd files installed by nsd/ns/install.sh
 sudo make -C /opt/nsd-4.14.1 uninstall 2>/dev/null
