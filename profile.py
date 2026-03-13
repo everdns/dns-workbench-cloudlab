@@ -114,6 +114,12 @@ elif params.name_server_software == "knotdns":
         node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh true'))
     else:
         node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh false'))
+#NSD Name Server
+elif params.name_server_software == "nsd":
+    if params.multiple_resolver_iface:
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh true'))
+    else:
+        node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh false'))
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
