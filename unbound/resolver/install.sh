@@ -12,5 +12,4 @@ if [ "$MULTIPLE_IFACE" = true ]; then
 else
     sudo cp /local/repository/unbound/resolver/forward.conf /usr/local/etc/unbound/forward.conf
 fi
-sudo /usr/local/sbin/unbound-checkconf
-sudo /usr/local/sbin/unbound
+sudo unbound -c /usr/local/etc/unbound/unbound.conf
