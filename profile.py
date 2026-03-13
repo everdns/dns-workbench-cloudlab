@@ -20,7 +20,7 @@ pc = portal.Context()
 pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INTEGER, 1 )
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
 pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "none"])
-pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "unbound", "knotdns", "nsd", "none"])
+pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "knotdns", "nsd", "none"])
 pc.defineParameter("allow_interswitch_links", "Allow Interswitch Links", portal.ParameterType.BOOLEAN, False)
 # Create a Request object to start building the RSpec.
 request = pc.makeRequestRSpec()
@@ -92,6 +92,12 @@ elif params.resolver_software == "knot-resolver":
         node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh true'))
     else:
         node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh false'))
+#Unbound Resolver
+elif params.resolver_software == "unbound":
+    if params.multiple_resolver_iface:
+        node_Resolver.addService(pg.Execute('sh','/local/repository/unbound/resolver/install.sh true'))
+    else:
+        node_Resolver.addService(pg.Execute('sh','/local/repository/unbound/resolver/install.sh false'))
 #None or unimplemented resolver software
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
