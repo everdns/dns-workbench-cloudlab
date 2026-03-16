@@ -12,4 +12,3 @@ else
     sudo cp /local/repository/powerdns/resolver/recursor.conf /etc/powerdns/recursor.conf
 fi
 sudo systemctl unmask pdns-recursor
-sudo systemctl enable pdns-recursor && sudo systemctl start pdns-recursor

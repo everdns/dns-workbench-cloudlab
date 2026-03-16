@@ -13,4 +13,3 @@ else
     sudo cp /local/repository/knot/resolver/config.yaml /etc/knot-resolver/config.yaml
 fi
 sudo systemctl unmask knot-resolver
-sudo systemctl enable --now knot-resolver.service

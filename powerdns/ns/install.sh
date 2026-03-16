@@ -15,4 +15,3 @@ fi
 sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/powerdns/db.workbench.lan
 sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/powerdns/db.dns64perf.test
 sudo systemctl unmask pdns
-sudo systemctl enable pdns && sudo systemctl start pdns

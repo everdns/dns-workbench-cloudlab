@@ -13,4 +13,3 @@ fi
 sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/bind/db.workbench.lan
 sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/bind/db.dns64perf.test
 sudo systemctl unmask named
-sudo systemctl enable named && sudo systemctl start named

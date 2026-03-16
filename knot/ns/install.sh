@@ -16,4 +16,3 @@ else
 fi
 sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/knot/db.workbench.lan
 sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/knot/db.dns64perf.test
-sudo systemctl enable --now knot

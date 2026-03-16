@@ -13,4 +13,3 @@ else
 fi
 sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/nsd/db.workbench.lan
 sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/nsd/db.dns64perf.test
-sudo nsd -c /etc/nsd/nsd.conf

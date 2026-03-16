@@ -11,4 +11,3 @@ else
     sudo cp /local/repository/bind/resolver/named.conf.local /etc/bind/named.conf.local
 fi
 sudo systemctl unmask named
-sudo systemctl enable named && sudo systemctl start named
