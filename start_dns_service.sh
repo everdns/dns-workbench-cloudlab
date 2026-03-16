@@ -30,9 +30,12 @@ case "$1" in
     unbound-resolver)
         /local/repository/unbound/resolver/start.sh
         ;;
+    unbound-ns)
+        /local/repository/unbound/ns/start.sh
+        ;;
     *)
         echo "Unknown software: $1"
-        echo "Options: bind-resolver, bind-ns, powerdns-resolver, powerdns-ns, knot-resolver, knot-ns, nsd-ns, unbound-resolver"
+        echo "Options: bind-resolver, bind-ns, powerdns-resolver, powerdns-ns, knot-resolver, knot-ns, nsd-ns, unbound-resolver, unbound-ns"
         exit 1
         ;;
 esac
