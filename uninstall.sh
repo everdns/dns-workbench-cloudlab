@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Uninstall dns software that is installed
-
+#Stop dns services before uninstalling packages and files
 sudo sh ./stop_dns_service.sh
 
 # Remove nsd files installed by nsd/ns/install.sh
