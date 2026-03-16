@@ -2,15 +2,7 @@
 
 # Uninstall dns software that is installed
 
-# Stop services before uninstalling
-for svc in named pdns pdns-recursor knot-resolver knot; do
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-        echo "Stopping $svc..."
-        sudo systemctl stop "$svc"
-    fi
-done
-sudo pkill nsd
-sudo pkill unbound
+sudo sh ./stop_dns_service.sh
 
 # Remove nsd files installed by nsd/ns/install.sh
 sudo make -C /opt/nsd-4.14.1 uninstall 2>/dev/null
