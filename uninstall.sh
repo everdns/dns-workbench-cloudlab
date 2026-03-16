@@ -13,7 +13,7 @@ sudo make -C /opt/unbound-1.24.2 uninstall 2>/dev/null
 sudo rm -rf /usr/local/etc/unbound
 sudo rm -rf /opt/unbound-1.24.2.tar.gz /opt/unbound-1.24.2
 
-for pkg in bind9 bind9-utils bind9-dnsutils pdns-server pdns-recursor knot-resolver6 knot; do
+for pkg in bind9 bind9-utils pdns-server pdns-recursor knot-resolver6 knot; do
     if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
         echo "Removing $pkg..."
         sudo apt-get remove --purge "$pkg" -y
