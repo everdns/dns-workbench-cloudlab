@@ -2,7 +2,7 @@
 MULTIPLE_IFACE="${1:-false}"
 sudo apt update -y
 sudo wget https://nlnetlabs.nl/downloads/nsd/nsd-4.14.1.tar.gz -O /opt/nsd-4.14.1.tar.gz
-sudo tar -xzf /opt/nsd-4.14.1.tar.gz
+sudo tar -xzf /opt/nsd-4.14.1.tar.gz -C /opt
 sudo apt install -y build-essential libssl-dev libevent-dev bison flex
 sudo apt install -y protobuf-c-compiler libprotobuf-c-dev libfstrm-dev
 cd /opt/nsd-4.14.1 && sudo ./configure && sudo make && sudo make install
