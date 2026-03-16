@@ -20,7 +20,7 @@ pc = portal.Context()
 pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INTEGER, 1 )
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
 pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "all", "none"])
-pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "knotdns", "nsd", "all", "none"])
+pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "knotdns", "nsd", "unbound", "all", "none"])
 pc.defineParameter("allow_interswitch_links", "Allow Interswitch Links", portal.ParameterType.BOOLEAN, False)
 # Create a Request object to start building the RSpec.
 request = pc.makeRequestRSpec()
@@ -75,7 +75,6 @@ else:
     main_link.addInterface(iface_ns)
 
 iface_flag = "true" if params.multiple_resolver_iface else "false"
-
 #Bind Resolver
 if params.resolver_software == "bind":
     node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh ' + iface_flag))
@@ -118,12 +117,17 @@ elif params.name_server_software == "knotdns":
 elif params.name_server_software == "nsd":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh ' + iface_flag))
     node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/start.sh'))
+#Unbound Name Server
+elif params.name_server_software == "unbound":
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/start.sh'))
 #All Name Server Software (install only, no start)
 elif params.name_server_software == "all":
     node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh ' + iface_flag))
     node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh ' + iface_flag))
     node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh ' + iface_flag))
     node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/install.sh ' + iface_flag))
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
