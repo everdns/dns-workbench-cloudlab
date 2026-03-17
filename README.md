@@ -64,7 +64,7 @@ Accepts the same software options as `start_dns_service.sh`. When run with no ar
 Collects all DNS configuration files from the current node into a single Markdown file.
 
 ```
-/local/repository/collect_configs.sh
+sudo /local/repository/collect_configs.sh
 ```
 
 - Output is written to `~/dns_configs.md`.
@@ -76,7 +76,7 @@ Collects all DNS configuration files from the current node into a single Markdow
 Collects the CloudLab startup execution logs from the current node into a single Markdown file.
 
 ```
-/local/repository/collect_startup_logs.sh
+sudo /local/repository/collect_startup_logs.sh
 ```
 
 - Output is written to `~/startup_logs.md`.
