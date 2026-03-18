@@ -1,0 +1,15 @@
+{
+    "sld": "workbench.lan",
+    "base_subnet": "10.0.0.0",
+    "num_records": 16777216,
+    "max_records_per_file": 65536,
+    "num_ips": 16777216,
+    "out_dir": "output",
+    "record_weights": {
+        "A": 63,
+        "AAAA": 20,
+        "HTTPS": 8,
+        "CNAME": 2,
+        "MX": 2
+    }
+}

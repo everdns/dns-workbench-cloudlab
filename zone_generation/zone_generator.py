@@ -1,37 +1,33 @@
+import argparse
 import ipaddress
+import json
 import os
 import random
 import string
 import math
 
-HEADER = """$TTL 3600
-@   IN  SOA ns1.workbench.lan. admin.workbench.lan. (
+
+def make_header(sld):
+    return f"""$TTL 3600
+@   IN  SOA ns1.{sld}. admin.{sld}. (
             2026010701 ; serial (YYYYMMDDnn)
             3600       ; refresh
             1800       ; retry
             604800     ; expire
             3600 )     ; minimum
 
-    IN  NS  ns1.workbench.lan.
+    IN  NS  ns1.{sld}.
 ns1     IN  A 10.10.1.2
 """
-SLD = "workbench.lan"
-BASE_SUBNET = "10.0.0.0"
-BASE_SUBNET_FILE_STR = BASE_SUBNET.replace('.', '-')
-NUM_RECORDS = 16777216 
-MAX_RECORDS_PER_FILE = 65536
-NUM_IPS = 16777216 
-OUT_DIR = "output"
-if not os.path.exists(OUT_DIR):
-    os.makedirs(OUT_DIR)
 
-RECORD_WEIGHTS = {
+DEFAULT_RECORD_WEIGHTS = {
     'A': 63,
     'AAAA': 20,
     'HTTPS': 8,
     'CNAME': 2,
     'MX': 2,
-}    
+}
+
 
 def generate_interleaved_record_types_pattern(record_counts, types_order):
     record_types = []
@@ -43,31 +39,34 @@ def generate_interleaved_record_types_pattern(record_counts, types_order):
                 record_counts[rtype] -= 1
     return record_types
 
-def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet: str, out_dir: str, max_records_per_file: int):
-    types_order = list(RECORD_WEIGHTS.keys())
+def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet: str, out_dir: str, max_records_per_file: int, record_weights: dict = None):
+    record_weights = record_weights or DEFAULT_RECORD_WEIGHTS
+    types_order = list(record_weights.keys())
+    header = make_header(sld)
+    base_subnet_file_str = base_subnet.replace('.', '-')
 
     # Parse the base subnet to get the starting IP
     network = ipaddress.ip_network(base_subnet, strict=False)
     start_ip = network.network_address
 
     # Calculate total weight and record counts per type
-    total_weight = sum(RECORD_WEIGHTS.values())
+    total_weight = sum(record_weights.values())
     iters_through_main_record_pattern = num_records // total_weight
     remaining_records_count = num_records % total_weight
-    remaining_record_counts = {rtype: int((RECORD_WEIGHTS[rtype] / total_weight) * remaining_records_count) for rtype in RECORD_WEIGHTS}
+    remaining_record_counts = {rtype: int((record_weights[rtype] / total_weight) * remaining_records_count) for rtype in record_weights}
 
     if sum(remaining_record_counts.values()) < remaining_records_count:
         # If due to rounding we have fewer records than needed, add the remaining ones to the most common type
         remaining_record_counts['A'] += remaining_records_count - sum(remaining_record_counts.values())
 
-    primary_pattern = generate_interleaved_record_types_pattern(dict.copy(RECORD_WEIGHTS), types_order)
+    primary_pattern = generate_interleaved_record_types_pattern(dict.copy(record_weights), types_order)
     remaining_pattern = generate_interleaved_record_types_pattern(remaining_record_counts, types_order)
     main_pattern_record_count = iters_through_main_record_pattern * len(primary_pattern)
 
     # Calculate file boundaries
     num_files = math.ceil(num_records / max_records_per_file)
 
-    dnsperf_file = open(os.path.join(out_dir, f"dnsperf_input_{BASE_SUBNET_FILE_STR}_{num_records}"), 'w')
+    dnsperf_file = open(os.path.join(out_dir, f"dnsperf_input_{base_subnet_file_str}_{num_records}"), 'w')
 
     try:
         file_idx = 0
@@ -82,9 +81,9 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
             if file_record_count == 0:
                 if zone_file:
                     zone_file.close()
-                filename = f"zone_file_{BASE_SUBNET_FILE_STR}_p{file_idx}"
+                filename = f"zone_file_{base_subnet_file_str}_p{file_idx}"
                 zone_file = open(os.path.join(out_dir, filename), 'w')
-                zone_file.write(HEADER)
+                zone_file.write(header)
 
             ip_index = i % num_ips + 1  # +1 to avoid using the network address (first IP)
             ip_addr = start_ip + ip_index
@@ -164,6 +163,36 @@ def get_zone_file_entry(fqdn, data, record_type='A'):
     else:
         return f"{fqdn}.  IN  {record_type}  {data}\n"
 
+def load_config(config_path):
+    with open(config_path) as f:
+        return json.load(f)
+
+
 if __name__ == "__main__":
-    num_files = generate_fqdns_and_ips(NUM_IPS, NUM_RECORDS, SLD, BASE_SUBNET, OUT_DIR, MAX_RECORDS_PER_FILE)
-    print(f"Created {NUM_RECORDS} domain/ip pairs across {num_files} zone file(s)")
+    parser = argparse.ArgumentParser(description="Generate DNS zone files and dnsperf input")
+    parser.add_argument("--config", default=None, help="Path to JSON config file")
+    parser.add_argument("--sld", default="workbench.lan", help="Second-level domain (default: workbench.lan)")
+    parser.add_argument("--base-subnet", default="10.0.0.0", help="Base subnet address (default: 10.0.0.0)")
+    parser.add_argument("--num-records", type=int, default=16777216, help="Number of DNS records to generate (default: 16777216)")
+    parser.add_argument("--max-records-per-file", type=int, default=65536, help="Max records per zone file (default: 65536)")
+    parser.add_argument("--num-ips", type=int, default=16777216, help="Number of unique IPs (default: 16777216)")
+    parser.add_argument("--out-dir", default="output", help="Output directory (default: output)")
+    args = parser.parse_args()
+
+    record_weights = None
+    if args.config:
+        file_config = load_config(args.config)
+        record_weights = file_config.pop('record_weights', None)
+        # Config file values become defaults; CLI args already parsed take precedence
+        parser.set_defaults(**{k: v for k, v in file_config.items() if k != 'config'})
+        args = parser.parse_args()
+
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
+
+    num_files = generate_fqdns_and_ips(
+        args.num_ips, args.num_records, args.sld,
+        args.base_subnet, args.out_dir, args.max_records_per_file,
+        record_weights,
+    )
+    print(f"Created {args.num_records} domain/ip pairs across {num_files} zone file(s)")
