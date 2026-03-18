@@ -14,9 +14,10 @@ sudo git clone https://github.com/everdns/dnsperf-dnsworkbench.git /opt/dnsperf-
 cd /opt/dnsperf-dnsworkbench && sudo ./autogen.sh && sudo ./configure
 cd /opt/dnsperf-dnsworkbench && sudo make && sudo make install
 sudo apt install -y gcc g++
-sudo apt install -y clang
+sudo apt install -y clang 
 sudo git clone https://github.com/everdns/dns64perfpp-dnsworkbench.git /opt/dns64perfpp-dnsworkbench
 cd /opt/dns64perfpp-dnsworkbench && sudo make CXXFLAGS+=" -DDNS64PERFPP_IPV4" && sudo make install
 sudo git clone https://github.com/everdns/dns64perfpp-dnsworkbench.git /opt/dns64perfpp
 cd /opt/dns64perfpp && sudo git checkout original_feature/multiport
 cd /opt/dns64perfpp && sudo make CXXFLAGS+=" -DDNS64PERFPP_IPV4" && sudo make install
+sudo apt install -y knot-dnsutils
