@@ -66,6 +66,9 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
     # Calculate file boundaries
     num_files = math.ceil(num_records / max_records_per_file)
 
+    main_zone_filename = f"db.{sld}"
+    single_file = num_files == 1
+
     dnsperf_file = open(os.path.join(out_dir, f"dnsperf_input_{base_subnet_file_str}_{num_records}"), 'w')
 
     try:
@@ -81,9 +84,12 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
             if file_record_count == 0:
                 if zone_file:
                     zone_file.close()
-                filename = f"zone_file_{base_subnet_file_str}_p{file_idx}"
-                zone_file = open(os.path.join(out_dir, filename), 'w')
-                zone_file.write(header)
+                if single_file:
+                    zone_file = open(os.path.join(out_dir, main_zone_filename), 'w')
+                    zone_file.write(header)
+                else:
+                    part_filename = f"{main_zone_filename}.part{file_idx + 1}"
+                    zone_file = open(os.path.join(out_dir, part_filename), 'w')
 
             ip_index = i % num_ips + 1  # +1 to avoid using the network address (first IP)
             ip_addr = start_ip + ip_index
@@ -141,6 +147,13 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
         if zone_file:
             zone_file.close()
         dnsperf_file.close()
+
+    # For multi-file: write main zone file with header + $INCLUDE directives
+    if not single_file:
+        with open(os.path.join(out_dir, main_zone_filename), 'w') as main_file:
+            main_file.write(header)
+            for part_num in range(1, num_files + 1):
+                main_file.write(f'$INCLUDE "{main_zone_filename}.part{part_num}"\n')
 
     return num_files
 
