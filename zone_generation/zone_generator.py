@@ -28,6 +28,15 @@ DEFAULT_RECORD_WEIGHTS = {
     'MX': 2,
 }
 
+DEFAULTS = {
+    'sld': 'workbench.lan',
+    'base_subnet': '10.0.0.0',
+    'num_records': 16777216,
+    'max_records_per_file': 65536,
+    'num_ips': 16777216,
+    'out_dir': 'output',
+}
+
 
 def generate_interleaved_record_types_pattern(record_counts, types_order):
     record_types = []
@@ -39,8 +48,7 @@ def generate_interleaved_record_types_pattern(record_counts, types_order):
                 record_counts[rtype] -= 1
     return record_types
 
-def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet: str, out_dir: str, max_records_per_file: int, record_weights: dict = None):
-    record_weights = record_weights or DEFAULT_RECORD_WEIGHTS
+def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet: str, out_dir: str, max_records_per_file: int, record_weights: dict = DEFAULT_RECORD_WEIGHTS):
     types_order = list(record_weights.keys())
     header = make_header(sld)
     base_subnet_file_str = base_subnet.replace('.', '-')
@@ -184,28 +192,33 @@ def load_config(config_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate DNS zone files and dnsperf input")
     parser.add_argument("--config", default=None, help="Path to JSON config file")
-    parser.add_argument("--sld", default="workbench.lan", help="Second-level domain (default: workbench.lan)")
-    parser.add_argument("--base-subnet", default="10.0.0.0", help="Base subnet address (default: 10.0.0.0)")
-    parser.add_argument("--num-records", type=int, default=16777216, help="Number of DNS records to generate (default: 16777216)")
-    parser.add_argument("--max-records-per-file", type=int, default=65536, help="Max records per zone file (default: 65536)")
-    parser.add_argument("--num-ips", type=int, default=16777216, help="Number of unique IPs (default: 16777216)")
-    parser.add_argument("--out-dir", default="output", help="Output directory (default: output)")
+    parser.add_argument("--sld", default=None, help="Second-level domain (default: workbench.lan)")
+    parser.add_argument("--base-subnet", default=None, help="Base subnet address (default: 10.0.0.0)")
+    parser.add_argument("--num-records", type=int, default=None, help="Number of DNS records to generate (default: 16777216)")
+    parser.add_argument("--max-records-per-file", type=int, default=None, help="Max records per zone file (default: 65536)")
+    parser.add_argument("--num-ips", type=int, default=None, help="Number of unique IPs (default: 16777216)")
+    parser.add_argument("--out-dir", default=None, help="Output directory (default: output)")
     args = parser.parse_args()
 
-    record_weights = None
+    # Start with defaults, layer config file values, then CLI args
+    config = dict(DEFAULTS)
+    record_weights = DEFAULT_RECORD_WEIGHTS
+
     if args.config:
         file_config = load_config(args.config)
-        record_weights = file_config.pop('record_weights', None)
-        # Config file values become defaults; CLI args already parsed take precedence
-        parser.set_defaults(**{k: v for k, v in file_config.items() if k != 'config'})
-        args = parser.parse_args()
+        record_weights = file_config.pop('record_weights', DEFAULT_RECORD_WEIGHTS)
+        config.update({k: v for k, v in file_config.items() if k != 'config'})
 
-    if not os.path.exists(args.out_dir):
-        os.makedirs(args.out_dir)
+    # CLI args override config file values (only if explicitly provided)
+    cli_overrides = {k: v for k, v in vars(args).items() if v is not None and k != 'config'}
+    config.update(cli_overrides)
+
+    if not os.path.exists(config['out_dir']):
+        os.makedirs(config['out_dir'])
 
     num_files = generate_fqdns_and_ips(
-        args.num_ips, args.num_records, args.sld,
-        args.base_subnet, args.out_dir, args.max_records_per_file,
+        config['num_ips'], config['num_records'], config['sld'],
+        config['base_subnet'], config['out_dir'], config['max_records_per_file'],
         record_weights,
     )
-    print(f"Created {args.num_records} domain/ip pairs across {num_files} zone file(s)")
+    print(f"Created {config['num_records']} domain/ip pairs across {num_files} zone file(s)")
