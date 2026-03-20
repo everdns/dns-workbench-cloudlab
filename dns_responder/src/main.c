@@ -38,6 +38,7 @@ struct config {
 	int  verbose;
 	char xdp_prog_path[512];
 	char output_path[512];
+	char timestamps_path[512];
 };
 
 static void config_defaults(struct config *cfg)
@@ -71,6 +72,7 @@ static void usage(const char *prog)
 		"  -Z, --no-zerocopy        Disable zero-copy, use copy mode\n"
 		"  -b, --batch-size N       RX/TX batch size (default: %d)\n"
 		"  -f, --frame-count N      UMEM frames per queue (default: %d)\n"
+		"  -t, --timestamps FILE    Write per-packet RX timestamps to file\n"
 		"  -x, --xdp-prog FILE      Path to XDP object file\n"
 		"  -v, --verbose            Print per-thread stats\n"
 		"  -h, --help               Show this help\n",
@@ -84,6 +86,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		{ "queues",      required_argument, NULL, 'q' },
 		{ "duration",    required_argument, NULL, 'd' },
 		{ "output",      required_argument, NULL, 'o' },
+		{ "timestamps",  required_argument, NULL, 't' },
 		{ "zerocopy",    no_argument,       NULL, 'z' },
 		{ "no-zerocopy", no_argument,       NULL, 'Z' },
 		{ "batch-size",  required_argument, NULL, 'b' },
@@ -95,7 +98,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:q:d:o:zZb:f:x:vh",
+	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:zZb:f:x:vh",
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -110,6 +113,10 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		case 'o':
 			snprintf(cfg->output_path, sizeof(cfg->output_path),
 				 "%s", optarg);
+			break;
+		case 't':
+			snprintf(cfg->timestamps_path,
+				 sizeof(cfg->timestamps_path), "%s", optarg);
 			break;
 		case 'z':
 			cfg->zerocopy = 2; /* force */
@@ -328,11 +335,13 @@ int main(int argc, char **argv)
 		bind_flags = XDP_COPY;
 
 	/* Initialize per-queue UMEM and AF_XDP sockets */
+	int record_ts = cfg.timestamps_path[0] != '\0';
 	for (int q = 0; q < cfg.num_queues; q++) {
 		struct worker_ctx *w = &workers[q];
 		w->running = (volatile int *)&running;
 		w->batch_size = cfg.batch_size;
 		w->cpu_id = q;
+		w->record_timestamps = record_ts;
 
 		if (xsk_umem_init(&w->xsk, cfg.frame_count,
 				  DEFAULT_FRAME_SIZE) < 0)
@@ -374,6 +383,10 @@ int main(int argc, char **argv)
 
 	struct timespec start_time;
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+	/* Pass start time to workers for timestamp recording */
+	for (int q = 0; q < cfg.num_queues; q++)
+		workers[q].start_time = start_time;
 
 	/* Launch worker threads */
 	for (int q = 0; q < cfg.num_queues; q++) {
@@ -455,6 +468,64 @@ join:
 		}
 
 		free(all_stats);
+	}
+
+	/* Write per-packet timestamps if requested */
+	if (cfg.timestamps_path[0] != '\0') {
+		FILE *tf = fopen(cfg.timestamps_path, "w");
+		if (tf) {
+			fprintf(tf, "# Per-packet RX timestamps (nanoseconds "
+				"since start)\n");
+			fprintf(tf, "# Merge-sorted across %d worker threads\n",
+				cfg.num_queues);
+
+			/* Count total timestamps */
+			uint64_t total_ts = 0;
+			for (int q = 0; q < cfg.num_queues; q++)
+				total_ts += workers[q].ts.count;
+
+			/* Merge-sort across threads using per-thread cursors */
+			uint64_t *cursors = calloc(cfg.num_queues,
+						   sizeof(uint64_t));
+			if (cursors) {
+				for (uint64_t written = 0; written < total_ts;
+				     written++) {
+					int best = -1;
+					uint64_t best_ts = UINT64_MAX;
+					for (int q = 0; q < cfg.num_queues;
+					     q++) {
+						if (cursors[q] >=
+						    workers[q].ts.count)
+							continue;
+						uint64_t ts =
+							workers[q].ts
+								.data[cursors[q]];
+						if (ts < best_ts) {
+							best_ts = ts;
+							best = q;
+						}
+					}
+					if (best < 0)
+						break;
+					fprintf(tf, "%lu\n", best_ts);
+					cursors[best]++;
+				}
+				free(cursors);
+			}
+
+			fclose(tf);
+			fprintf(stderr, "Timestamps written to %s (%lu entries)\n",
+				cfg.timestamps_path, total_ts);
+		} else {
+			fprintf(stderr, "WARNING: could not open %s: %s\n",
+				cfg.timestamps_path, strerror(errno));
+		}
+	}
+
+	/* Free timestamp buffers */
+	if (workers) {
+		for (int q = 0; q < cfg.num_queues; q++)
+			free(workers[q].ts.data);
 	}
 
 	ret = 0;

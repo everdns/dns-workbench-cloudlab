@@ -2,6 +2,7 @@
 #define AF_XDP_H
 
 #include <stdint.h>
+#include <time.h>
 #include <xdp/xsk.h>
 
 #include "stats.h"
@@ -32,6 +33,13 @@ struct xsk_info {
 	int                     queue_id;
 };
 
+/* Dynamic timestamp buffer for per-packet arrival recording */
+struct ts_buffer {
+	uint64_t *data;       /* nanosecond timestamps (relative to start) */
+	uint64_t  count;
+	uint64_t  capacity;
+};
+
 /* Worker thread context */
 struct worker_ctx {
 	struct xsk_info         xsk;
@@ -39,6 +47,9 @@ struct worker_ctx {
 	int                     cpu_id;
 	volatile int           *running;
 	int                     batch_size;
+	int                     record_timestamps;
+	struct timespec         start_time;
+	struct ts_buffer        ts;
 } __attribute__((aligned(64)));
 
 /*

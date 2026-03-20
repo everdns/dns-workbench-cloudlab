@@ -9,7 +9,10 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
+
+#define TS_INITIAL_CAPACITY (1 << 20) /* 1M entries */
 
 /* Pop a free frame address from the stack. Returns -1 if empty. */
 static inline int64_t alloc_frame(struct xsk_info *xsk)
@@ -177,11 +180,43 @@ static void kick_tx(struct xsk_info *xsk)
 	sendto(xsk_socket__fd(xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
 }
 
+static inline void ts_record(struct ts_buffer *ts, const struct timespec *start)
+{
+	if (__builtin_expect(ts->count == ts->capacity, 0)) {
+		uint64_t new_cap = ts->capacity * 2;
+		uint64_t *new_data = realloc(ts->data,
+					     new_cap * sizeof(uint64_t));
+		if (!new_data)
+			return; /* drop timestamp on OOM */
+		ts->data = new_data;
+		ts->capacity = new_cap;
+	}
+
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	uint64_t now_ns = (uint64_t)now.tv_sec * 1000000000ULL + now.tv_nsec;
+	uint64_t start_ns = (uint64_t)start->tv_sec * 1000000000ULL
+			    + start->tv_nsec;
+	ts->data[ts->count++] = now_ns - start_ns;
+}
+
 void *worker_thread(void *arg)
 {
 	struct worker_ctx *ctx = (struct worker_ctx *)arg;
 	struct xsk_info *xsk = &ctx->xsk;
 	int batch_size = ctx->batch_size;
+
+	/* Initialize timestamp buffer if recording */
+	if (ctx->record_timestamps) {
+		ctx->ts.capacity = TS_INITIAL_CAPACITY;
+		ctx->ts.count = 0;
+		ctx->ts.data = malloc(ctx->ts.capacity * sizeof(uint64_t));
+		if (!ctx->ts.data) {
+			fprintf(stderr, "WARNING: queue %d: timestamp alloc "
+				"failed, disabling\n", ctx->cpu_id);
+			ctx->record_timestamps = 0;
+		}
+	}
 
 	while (__builtin_expect(*ctx->running, 1)) {
 		uint32_t rx_idx = 0;
@@ -232,6 +267,9 @@ void *worker_thread(void *arg)
 
 			ctx->stats.rx_packets++;
 			ctx->stats.rx_bytes += pkt_len;
+
+			if (ctx->record_timestamps)
+				ts_record(&ctx->ts, &ctx->start_time);
 
 			uint16_t qtype = 0;
 			uint32_t new_len = process_dns_packet(pkt, pkt_len,
