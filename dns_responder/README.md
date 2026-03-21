@@ -89,6 +89,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-Z, --no-zerocopy` | Force copy mode | — |
 | `-b, --batch-size N` | RX/TX batch size | 64 |
 | `-f, --frame-count N` | UMEM frames per queue | 4096 |
+| `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |
 | `-x, --xdp-prog FILE` | Path to XDP object file | `./xdp/xdp_dns_redirect.o` |
 | `-v, --verbose` | Print per-thread breakdown | off |
 
@@ -140,6 +141,31 @@ dns64perf++ <responder_ip> 53 <queryfile> 30 1000000
 
 # On the responder host:
 sudo ./dns_responder -i eth1 -d 35
+```
+
+## Timestamps File Format
+
+When using `-t, --timestamps FILE`, the output is a plain text file with one nanosecond timestamp per line, sorted in chronological order:
+
+```
+# Per-packet RX timestamps (nanoseconds since start)
+# Merge-sorted across 4 worker threads
+182935
+281074
+383691
+...
+```
+
+Each value is the `CLOCK_MONOTONIC` arrival time of an RX packet in nanoseconds relative to program start. Timestamps from all worker threads are merge-sorted into a single globally ordered sequence.
+
+This can be used to compute inter-packet arrival times, detect microbursts, or build packet-rate histograms:
+
+```sh
+# Compute inter-arrival times (nanoseconds)
+grep -v '^#' timestamps.txt | awk 'NR>1{print $1-prev}{prev=$1}'
+
+# Packets per 1ms bin
+grep -v '^#' timestamps.txt | awk '{print int($1/1000000)}' | uniq -c
 ```
 
 ## Benchmark Methodology
