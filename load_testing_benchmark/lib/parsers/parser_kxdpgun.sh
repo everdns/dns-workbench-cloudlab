@@ -2,14 +2,13 @@
 # lib/parsers/parser_kxdpgun.sh — Parser for kxdpgun output
 #
 # Expected output format (relevant lines):
-#   Queries sent:      1000000
-#   Queries answered:  999950
-#   Queries lost:      50
-#
-#   Run time:          10.000 s
-#   Average QPS:       99995.00
-#
-#   Latency: average 0.420 ms, min 0.100 ms, max 50.000 ms
+#   total queries:     400040 (100010 pps)
+#   total replies:     400033 (100008 pps) (99%)
+#   average DNS reply size: 63 B
+#   average Ethernet reply rate: 84006930 bps (84.01 Mbps)
+#   responded NOERROR:   400026
+#   responded YXRRSET:   7
+#   duration: 4 s
 
 # parse_kxdpgun RAW_FILE
 # Extracts metrics from kxdpgun output.
@@ -22,25 +21,24 @@ parse_kxdpgun() {
         return 1
     fi
 
-    local qps queries_sent queries_answered queries_lost
-    local lat_avg lat_min lat_max
+    local queries_sent queries_replied qps duration
 
-    qps=$(extract_number "Average QPS:" "$file")
-    queries_sent=$(extract_number "Queries sent:" "$file")
-    queries_answered=$(extract_number "Queries answered:" "$file")
-    queries_lost=$(extract_number "Queries lost:" "$file")
+    # "total queries:     400040 (100010 pps)"
+    queries_sent=$(grep -E "total queries:" "$file" 2>/dev/null | head -1 | \
+        grep -oE '[0-9]+' | head -1)
 
-    # Latency line: "Latency: average 0.420 ms, min 0.100 ms, max 50.000 ms"
-    local lat_line
-    lat_line=$(grep -E "Latency:" "$file" 2>/dev/null | head -1)
-    if [[ -n "$lat_line" ]]; then
-        lat_avg=$(echo "$lat_line" | grep -oE 'average [0-9.]+' | grep -oE '[0-9.]+')
-        lat_min=$(echo "$lat_line" | grep -oE 'min [0-9.]+' | grep -oE '[0-9.]+')
-        lat_max=$(echo "$lat_line" | grep -oE 'max [0-9.]+' | grep -oE '[0-9.]+')
-    fi
+    # "total replies:     400033 (100008 pps) (99%)"
+    queries_replied=$(grep -E "total replies:" "$file" 2>/dev/null | head -1 | \
+        grep -oE '[0-9]+' | head -1)
 
-    # kxdpgun does not report stddev
-    local lat_stddev=""
+    # Extract QPS from the pps value on the total replies line
+    qps=$(grep -E "total replies:" "$file" 2>/dev/null | head -1 | \
+        grep -oE '\([0-9]+ pps\)' | grep -oE '[0-9]+')
 
-    echo "${qps:-0} ${lat_avg:-0} ${lat_min:-0} ${lat_max:-0} ${lat_stddev:-} ${queries_sent:-0} ${queries_answered:-0} ${queries_lost:-0}"
+    # Compute queries lost
+    local queries_lost
+    queries_lost=$(awk "BEGIN { printf \"%d\", ${queries_sent:-0} - ${queries_replied:-0} }")
+
+    # kxdpgun does not report latency
+    echo "${qps:-0} 0 0 0 0 ${queries_sent:-0} ${queries_replied:-0} ${queries_lost}"
 }

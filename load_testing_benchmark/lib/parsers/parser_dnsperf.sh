@@ -2,18 +2,17 @@
 # lib/parsers/parser_dnsperf.sh — Parser for dnsperf and dnsperf-workbench output
 #
 # Expected output format (relevant lines):
-#   Queries sent:         1000000
-#   Queries completed:    999950 (99.99%)
-#   Queries lost:         50 (0.01%)
+#   Queries sent:         3018807
+#   Queries completed:    3018807 (100.00%)
+#   Queries lost:         0 (0.00%)
 #
-#   Response codes:       NOERROR 999950 (100.00%)
+#   Response codes:       NOERROR 3018807 (100.00%)
+#   Average packet size:  request 47, response 63
+#   Run time (s):         10.000390
+#   Queries per second:   301868.927112
 #
-#   Queries per second:   99995.000000
-#
-#   Average Latency (s):  0.000420
-#   Minimum Latency (s):  0.000100
-#   Maximum Latency (s):  0.050000
-#   Latency StdDev (s):   0.001200
+#   Average Latency (s):  0.000180 (min 0.000026, max 0.014830)
+#   Latency StdDev (s):   0.000513
 
 # parse_dnsperf RAW_FILE
 # Extracts metrics from dnsperf/dnsperf-workbench output.
@@ -34,10 +33,15 @@ parse_dnsperf() {
     queries_completed=$(extract_number "Queries completed:" "$file")
     queries_lost=$(extract_number "Queries lost:" "$file")
 
-    # Latencies are in seconds in dnsperf output; convert to ms
-    lat_avg=$(extract_number "Average Latency" "$file")
-    lat_min=$(extract_number "Minimum Latency" "$file")
-    lat_max=$(extract_number "Maximum Latency" "$file")
+    # Average Latency (s):  0.000180 (min 0.000026, max 0.014830)
+    local lat_line
+    lat_line=$(grep -E "Average Latency" "$file" 2>/dev/null | head -1)
+    if [[ -n "$lat_line" ]]; then
+        lat_avg=$(echo "$lat_line" | grep -oE 'Average Latency \(s\):\s+[0-9.]+' | grep -oE '[0-9]+\.?[0-9]*' | tail -1)
+        lat_min=$(echo "$lat_line" | grep -oE 'min [0-9.]+' | grep -oE '[0-9.]+')
+        lat_max=$(echo "$lat_line" | grep -oE 'max [0-9.]+' | grep -oE '[0-9.]+')
+    fi
+
     lat_stddev=$(extract_number "Latency StdDev" "$file")
 
     # Convert seconds to milliseconds

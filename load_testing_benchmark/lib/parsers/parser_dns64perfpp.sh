@@ -2,13 +2,11 @@
 # lib/parsers/parser_dns64perfpp.sh — Parser for dns64perf++ and dns64perfpp-workbench output
 #
 # Expected output format (relevant lines):
-#   Sent:       1000000
-#   Received:   999950
-#   Lost:       50
-#   Rate:       99995.00 qps
-#   Avg Latency: 0.42 ms
-#   Min Latency: 0.10 ms
-#   Max Latency: 50.00 ms
+#   Sent queries: 1000000
+#   Received answers: 999999 (100.00%)
+#   Valid answers: 999999 (100.00%)
+#   Average round-trip time: 0.21 ms
+#   Standard deviation of the round-trip time: 0.12 ms
 
 # parse_dns64perfpp RAW_FILE
 # Extracts metrics from dns64perf++ / dns64perfpp-workbench output.
@@ -21,20 +19,19 @@ parse_dns64perfpp() {
         return 1
     fi
 
-    local qps sent received lost
-    local lat_avg lat_min lat_max
+    local sent received lat_avg lat_stddev
 
-    qps=$(extract_number "Rate:" "$file")
-    sent=$(extract_number "Sent:" "$file")
-    received=$(extract_number "Received:" "$file")
-    lost=$(extract_number "Lost:" "$file")
+    sent=$(extract_number "Sent queries:" "$file")
+    received=$(extract_number "Received answers:" "$file")
 
-    lat_avg=$(extract_number "Avg Latency:" "$file")
-    lat_min=$(extract_number "Min Latency:" "$file")
-    lat_max=$(extract_number "Max Latency:" "$file")
+    # Latencies are already in ms
+    lat_avg=$(extract_number "Average round-trip time:" "$file")
+    lat_stddev=$(extract_number "Standard deviation of the round-trip time:" "$file")
 
-    # dns64perf++ does not report stddev
-    local lat_stddev=""
+    # Compute queries lost
+    local lost
+    lost=$(awk "BEGIN { printf \"%d\", ${sent:-0} - ${received:-0} }")
 
-    echo "${qps:-0} ${lat_avg:-0} ${lat_min:-0} ${lat_max:-0} ${lat_stddev:-} ${sent:-0} ${received:-0} ${lost:-0}"
+    # dns64perf++ does not report QPS, min latency, or max latency
+    echo "0 ${lat_avg:-0} 0 0 ${lat_stddev:-0} ${sent:-0} ${received:-0} ${lost}"
 }
