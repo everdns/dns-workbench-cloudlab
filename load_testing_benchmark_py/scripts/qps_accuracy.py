@@ -29,6 +29,7 @@ from benchmark.remote import ssh_run
 from benchmark.results import (
     ResultStore,
     compute_accuracy_metrics,
+    compute_actual_runtime,
     parse_dns_responder_output,
     read_timestamps_file,
 )
@@ -74,7 +75,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         )
 
         # Wait for dns_responder
-        resp_stdout, resp_stderr = wait_dns_responder(
+        wait_dns_responder(
             session["proc"], timeout=session["duration"] + 30
         )
 
@@ -82,17 +83,15 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         local_raw_dir = os.path.join(store.output_dir, script_name, "raw")
         os.makedirs(local_raw_dir, exist_ok=True)
 
-        try:
-            output_path, ts_path = collect_dns_responder_output(
-                config, session["output_file"], local_raw_dir,
-                session["timestamps_file"],
-            )
-            with open(output_path) as f:
-                resp_text = f.read()
-        except Exception as e:
-            log.warning("Failed to collect dns_responder output: %s", e)
-            resp_text = resp_stdout
-            ts_path = None
+        output_path, ts_path = collect_dns_responder_output(
+            config, session["output_file"], local_raw_dir,
+            session["timestamps_file"],
+        )
+        with open(output_path) as f:
+            resp_text = f.read()
+
+        if not ts_path:
+            raise RuntimeError("Failed to retrieve timestamps file from server")
 
         store.save_raw_output(
             script_name, f"{tool.name}_{qps}qps_trial{trial}_responder.txt", resp_text,
@@ -101,45 +100,30 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         # Parse dns_responder output
         resp_result = parse_dns_responder_output(resp_text)
 
-        # Parse timestamps and compute accuracy
+        # Save timestamps and compute accuracy
+        ts_dest = os.path.join(
+            store.output_dir, script_name, "timestamps",
+            f"{tool.name}_{qps}qps_trial{trial}_timestamps.txt",
+        )
+        os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
+        os.rename(ts_path, ts_dest)
+
+        timestamps = read_timestamps_file(ts_dest)
+        actual_runtime = compute_actual_runtime(timestamps)
+        log.info("Actual runtime from timestamps: %.3fs", actual_runtime)
+        accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"])
+
         rows = []
-        if ts_path:
-            # Copy timestamps to dedicated directory
-            ts_dest = os.path.join(
-                store.output_dir, script_name, "timestamps",
-                f"{tool.name}_{qps}qps_trial{trial}_timestamps.txt",
-            )
-            os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
-            os.rename(ts_path, ts_dest) if ts_path != ts_dest else None
-
-            timestamps = read_timestamps_file(ts_dest)
-            accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"])
-
-            for label, metrics in accuracy.items():
-                row = {
-                    "tool": tool.name,
-                    "target_qps": qps,
-                    "trial": trial + 1,
-                    "interval": label,
-                    "mean_qps": round(metrics.mean_qps, 2),
-                    "stddev": round(metrics.stddev, 2),
-                    "max_deviation": round(metrics.max_deviation, 2),
-                    "responder_avg_rx_pps": resp_result.avg_rx_pps,
-                    "responder_rx_total": resp_result.rx_total,
-                    "responder_drops": resp_result.drops,
-                }
-                store.add_result(row)
-                rows.append(row)
-        else:
-            # No timestamps available, record basic result
+        for label, metrics in accuracy.items():
             row = {
                 "tool": tool.name,
                 "target_qps": qps,
                 "trial": trial + 1,
-                "interval": "N/A",
-                "mean_qps": resp_result.avg_rx_pps,
-                "stddev": 0.0,
-                "max_deviation": abs(resp_result.avg_rx_pps - qps),
+                "interval": label,
+                "actual_runtime_s": actual_runtime,
+                "mean_qps": round(metrics.mean_qps, 2),
+                "stddev": round(metrics.stddev, 2),
+                "max_deviation": round(metrics.max_deviation, 2),
                 "responder_avg_rx_pps": resp_result.avg_rx_pps,
                 "responder_rx_total": resp_result.rx_total,
                 "responder_drops": resp_result.drops,

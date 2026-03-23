@@ -26,7 +26,12 @@ from benchmark.dns_responder import (
     wait_dns_responder,
 )
 from benchmark.remote import ssh_run
-from benchmark.results import ResultStore, parse_dns_responder_output
+from benchmark.results import (
+    ResultStore,
+    compute_actual_runtime,
+    parse_dns_responder_output,
+    read_timestamps_file,
+)
 from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
@@ -52,7 +57,7 @@ def run_single_test(config, tool, qps, store, script_name):
         return None
 
     # Start dns_responder on server
-    session = run_dns_responder_session(config, timestamps=False)
+    session = run_dns_responder_session(config, timestamps=True)
 
     try:
         # Run the load tool on client
@@ -75,26 +80,38 @@ def run_single_test(config, tool, qps, store, script_name):
         )
 
         # Wait for dns_responder to finish
-        resp_stdout, resp_stderr = wait_dns_responder(
+        wait_dns_responder(
             session["proc"], timeout=session["duration"] + 30
         )
 
-        # Collect dns_responder output from server
+        # Collect dns_responder output and timestamps from server
         local_raw_dir = os.path.join(store.output_dir, script_name, "raw")
         os.makedirs(local_raw_dir, exist_ok=True)
-        try:
-            output_path, _ = collect_dns_responder_output(
-                config, session["output_file"], local_raw_dir
-            )
-            with open(output_path) as f:
-                resp_text = f.read()
-        except Exception as e:
-            log.warning("Failed to collect dns_responder output: %s", e)
-            resp_text = resp_stdout
+        output_path, ts_path = collect_dns_responder_output(
+            config, session["output_file"], local_raw_dir,
+            session["timestamps_file"],
+        )
+        with open(output_path) as f:
+            resp_text = f.read()
+
+        if not ts_path:
+            raise RuntimeError("Failed to retrieve timestamps file from server")
 
         store.save_raw_output(
             script_name, f"{tool.name}_{qps}qps_responder.txt", resp_text,
         )
+
+        # Save timestamps file and compute actual runtime
+        ts_dest = os.path.join(
+            store.output_dir, script_name, "timestamps",
+            f"{tool.name}_{qps}qps_timestamps.txt",
+        )
+        os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
+        os.rename(ts_path, ts_dest)
+
+        timestamps = read_timestamps_file(ts_dest)
+        actual_runtime = compute_actual_runtime(timestamps)
+        log.info("Actual runtime from timestamps: %.3fs", actual_runtime)
 
         # Parse outputs
         tool_result = tool.parse_output(tool_stdout)
@@ -104,6 +121,7 @@ def run_single_test(config, tool, qps, store, script_name):
             "tool": tool.name,
             "requested_qps": qps,
             "achieved_qps_responder": resp_result.avg_rx_pps,
+            "actual_runtime_s": actual_runtime,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,

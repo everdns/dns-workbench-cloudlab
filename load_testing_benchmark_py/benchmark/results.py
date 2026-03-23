@@ -137,6 +137,20 @@ def read_timestamps_file(path):
     return timestamps
 
 
+def compute_actual_runtime(timestamps_ns):
+    """Compute actual run time from first and last timestamps.
+
+    Args:
+        timestamps_ns: list of nanosecond timestamps (ints)
+
+    Returns:
+        float: actual runtime in seconds, or 0.0 if insufficient data
+    """
+    if len(timestamps_ns) < 2:
+        return 0.0
+    return (timestamps_ns[-1] - timestamps_ns[0]) / 1_000_000_000
+
+
 class ResultStore:
     """Stores and exports benchmark results."""
 
