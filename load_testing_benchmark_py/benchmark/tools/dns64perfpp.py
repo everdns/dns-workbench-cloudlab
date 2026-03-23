@@ -45,7 +45,7 @@ class Dns64PerfPP(Tool):
             )
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         port = 53
         subnet = config["subnet"]
         threads = config["threads"]
@@ -59,7 +59,7 @@ class Dns64PerfPP(Tool):
         )
 
         return (
-            f"dns64perf++ {resolver} {port} {subnet}"
+            f"dns64perf++ {server} {port} {subnet}"
             f" {num_requests} {burst_size} {threads}"
             f" {ports_per_thread} {delay_ns} {timeout}"
         )

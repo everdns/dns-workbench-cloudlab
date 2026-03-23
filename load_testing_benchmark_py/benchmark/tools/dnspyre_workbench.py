@@ -10,7 +10,7 @@ class DnspyreWorkbench(Tool):
     reports_latency = True
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         runtime = config["runtime"]
         threads = config["dnspyre_workers"]
         timeout = config["timeout"]
@@ -18,7 +18,7 @@ class DnspyreWorkbench(Tool):
         input_file = config["input_files"]["dnsperf"]
 
         return (
-            f"dnspyre-dnsworkbench --server {resolver}"
+            f"dnspyre-dnsworkbench --server {server}"
             f" --duration {runtime}s -c {threads}"
             f" --rate-limit {qps} --request={timeout}s"
             f" @{input_file}"

@@ -16,7 +16,6 @@ def load_config(config_path=None):
 def apply_cli_overrides(config, args):
     """Apply CLI argument overrides to config dict."""
     overrides = {
-        "resolver": args.resolver,
         "server_interface": args.server_interface,
         "client_interface": args.client_interface,
         "threads": args.threads,
@@ -50,7 +49,7 @@ def add_common_args(parser):
     parser.add_argument("--config", default=None, help="Path to config YAML file")
     parser.add_argument("--server", help="Server host (user@host)")
     parser.add_argument("--client", help="Client host (user@host or localhost)")
-    parser.add_argument("--resolver", help="DNS resolver IP address")
+
     parser.add_argument("--server-interface", help="Network interface on server (for dns_responder)")
     parser.add_argument("--client-interface", help="Network interface on client (for kxdpgun)")
     parser.add_argument("--dnsperf-input", help="Path to dnsperf input file")

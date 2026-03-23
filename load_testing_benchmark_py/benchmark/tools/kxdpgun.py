@@ -9,7 +9,7 @@ class Kxdpgun(Tool):
     reports_latency = False
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         runtime = config["runtime"]
         input_file = config["input_files"]["dnsperf"]
         interface = config["client_interface"]
@@ -17,7 +17,7 @@ class Kxdpgun(Tool):
         return (
             f"kxdpgun -t {runtime} -Q {qps} -b 1"
             f" -i {input_file} -I {interface}"
-            f" {resolver}"
+            f" {server}"
         )
 
     def parse_output(self, stdout):

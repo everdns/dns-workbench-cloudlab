@@ -23,7 +23,7 @@ class Dns64PerfPPWorkbench(Tool):
             )
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         port = 53
         input_file = config["input_files"]["dnsperf"]
         threads = config["threads"]
@@ -37,7 +37,7 @@ class Dns64PerfPPWorkbench(Tool):
         )
 
         return (
-            f"dns64perfpp-workbench {resolver} {port} {input_file}"
+            f"dns64perfpp-workbench {server} {port} {input_file}"
             f" {num_requests} {burst_size} {threads}"
             f" {ports_per_thread} {delay_ns} {timeout}"
         )

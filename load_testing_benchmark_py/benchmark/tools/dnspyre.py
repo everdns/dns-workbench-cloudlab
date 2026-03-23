@@ -22,14 +22,14 @@ class Dnspyre(Tool):
     reports_latency = True
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         runtime = config["runtime"]
         threads = config["dnspyre_workers"]
         timeout = config["timeout"]
         input_file = config["input_files"]["dnspyre"]
 
         return (
-            f"dnspyre --type=A --server {resolver}"
+            f"dnspyre --type=A --server {server}"
             f" --duration {runtime}s -c {threads}"
             f" --rate-limit {qps} --request={timeout}s"
             f" @{input_file}"

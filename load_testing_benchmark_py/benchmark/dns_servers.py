@@ -50,23 +50,23 @@ def wait_for_dns_ready(config, timeout=30):
 
     Uses dig to send a test query.
     """
-    resolver = config["resolver"]
+    server = config["hosts"]["server"]
     client = config["hosts"]["client"]
 
-    log.info("Waiting for DNS server at %s to be ready...", resolver)
+    log.info("Waiting for DNS server at %s to be ready...", server)
     deadline = time.time() + timeout
 
     while time.time() < deadline:
         result = ssh_run(
             client,
-            f"dig @{resolver} example.com A +time=2 +tries=1 +short",
+            f"dig @{server} example.com A +time=2 +tries=1 +short",
             timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
-            log.info("DNS server at %s is ready", resolver)
+            log.info("DNS server at %s is ready", server)
             return True
         time.sleep(1)
 
     raise TimeoutError(
-        f"DNS server at {resolver} not ready after {timeout}s"
+        f"DNS server at {server} not ready after {timeout}s"
     )

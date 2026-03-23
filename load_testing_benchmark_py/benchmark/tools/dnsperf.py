@@ -16,7 +16,7 @@ class Dnsperf(Tool):
             raise ValueError(f"Invalid max_outstanding: {max_outstanding}")
 
     def build_command(self, config, qps):
-        resolver = config["resolver"]
+        server = config["hosts"]["server"]
         runtime = config["runtime"]
         input_file = config["input_files"]["dnsperf"]
         threads = config["threads"]
@@ -26,7 +26,7 @@ class Dnsperf(Tool):
         clients = threads * ports_per_thread
 
         return (
-            f"dnsperf -s {resolver} -l {runtime} -d {input_file}"
+            f"dnsperf -s {server} -l {runtime} -d {input_file}"
             f" -c {clients} -T {threads}"
             f" -Q {qps} -q {max_outstanding}"
             f" -O suppress=timeout -O qps-threshold-wait=0 -t {timeout}"
