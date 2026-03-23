@@ -31,7 +31,6 @@ def start_dns_responder(config, duration, output_file="/tmp/dns_responder_output
         f"-i {interface}",
         f"-d {duration}",
         f"-o {output_file}",
-        "-v",
     ]
     if xdp_prog:
         cmd_parts.append(f"-x {xdp_prog}")
