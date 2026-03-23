@@ -10,7 +10,7 @@ CLIENT_HOST="${CLIENT_HOST:-10.10.1.3}"
 SERVER_HOST="${SERVER_HOST:-10.10.1.2}"
 SSH_USER="${SSH_USER:-root}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=no -o ConnectTimeout=10}"
-REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-~/}"
+REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-/tmp/dns_load_test}"
 
 # --- Resolver ---
 RESOLVER="${RESOLVER:-10.10.1.2}"
@@ -63,8 +63,8 @@ ENABLED_TOOLS="${ENABLED_TOOLS:-$ALL_TOOLS}"
 KXDPGUN_INTERFACE="${KXDPGUN_INTERFACE:-enp94s0f0np0}"
 
 # --- Input Files ---
-DNSPERF_INPUT="${DNSPERF_INPUT:-~/dnsperf_input}"
-DNSPYRE_INPUT="${DNSPYRE_INPUT:-~/dnspyre_input}"
+DNSPERF_INPUT="${DNSPERF_INPUT:-/opt/dnsperf_input}"
+DNSPYRE_INPUT="${DNSPYRE_INPUT:-/opt/dnspyre_input}"
 
 # --- Output ---
 RESULTS_DIR="${RESULTS_DIR:-${CONFIG_DIR}/results}"
