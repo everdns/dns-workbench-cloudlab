@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <locale.h>
+#include <linux/if_link.h>
 #include <net/if.h>
 #include <pthread.h>
 #include <signal.h>
