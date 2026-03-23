@@ -6,14 +6,14 @@
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Connection ---
-CLIENT_HOST="${CLIENT_HOST:-}"
-SERVER_HOST="${SERVER_HOST:-}"
+CLIENT_HOST="${CLIENT_HOST:-10.10.1.3}"
+SERVER_HOST="${SERVER_HOST:-10.10.1.2}"
 SSH_USER="${SSH_USER:-root}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=no -o ConnectTimeout=10}"
-REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-/tmp/dns_benchmark}"
+REMOTE_WORK_DIR="${REMOTE_WORK_DIR:-~/}"
 
 # --- Resolver ---
-RESOLVER="${RESOLVER:-}"
+RESOLVER="${RESOLVER:-10.10.1.2}"
 RESOLVER_PORT="${RESOLVER_PORT:-53}"
 
 # --- Test Parameters ---
@@ -30,19 +30,19 @@ PAUSE_BETWEEN_RUNS="${PAUSE_BETWEEN_RUNS:-5}"
 DNS_RESPONDER_MARGIN="${DNS_RESPONDER_MARGIN:-5}"
 DNS_RESPONDER_STARTUP_WAIT="${DNS_RESPONDER_STARTUP_WAIT:-1}"
 DNS_RESPONDER_SHUTDOWN_WAIT="${DNS_RESPONDER_SHUTDOWN_WAIT:-5}"
-DNS_RESPONDER_INTERFACE="${DNS_RESPONDER_INTERFACE:-}"
-DNS_RESPONDER_BIN="${DNS_RESPONDER_BIN:-dns_responder}"
+DNS_RESPONDER_INTERFACE="${DNS_RESPONDER_INTERFACE:-enp94s0f0np0}"
+DNS_RESPONDER_BIN="${DNS_RESPONDER_BIN:-/local/repository/dns_responder/dns_responder}"
 
 # --- Script 1: Maximum Throughput ---
-START_QPS="${START_QPS:-200000}"
-QPS_STEP="${QPS_STEP:-10000}"
+START_QPS="${START_QPS:-100000}"
+QPS_STEP="${QPS_STEP:-100000}"
 MAX_QPS="${MAX_QPS:-3000000}"
 
 # --- Script 2: QPS Accuracy ---
 ACCURACY_MIN_QPS="${ACCURACY_MIN_QPS:-100000}"
-ACCURACY_MAX_QPS="${ACCURACY_MAX_QPS:-2000000}"
+ACCURACY_MAX_QPS="${ACCURACY_MAX_QPS:-1000000}"
 ACCURACY_STEP="${ACCURACY_STEP:-50000}"
-TRIALS="${TRIALS:-10}"
+TRIALS="${TRIALS:-5}"
 
 # --- Script 3: Load Generator Impact ---
 DNS_CONFIGS="${DNS_CONFIGS:-bind-resolver bind-ns powerdns-resolver powerdns-ns knot-resolver knot-ns nsd-ns unbound-resolver}"
@@ -52,19 +52,19 @@ IMPACT_QPS_STEP="${IMPACT_QPS_STEP:-100000}"
 IMPACT_TRIALS="${IMPACT_TRIALS:-10}"
 
 # --- DNS Server Management ---
-START_DNS_SCRIPT="${START_DNS_SCRIPT:-${CONFIG_DIR}/start_dns_service.sh}"
-STOP_DNS_SCRIPT="${STOP_DNS_SCRIPT:-${CONFIG_DIR}/stop_dns_service.sh}"
+START_DNS_SCRIPT="${START_DNS_SCRIPT:-/local/repository/start_dns_service.sh}"
+STOP_DNS_SCRIPT="${STOP_DNS_SCRIPT:-/local/repository/stop_dns_service.sh}"
 
 # --- Tool Selection ---
 ALL_TOOLS="dnsperf dnsperf-workbench-slice dnsperf-workbench-lencse dnspyre dnspyre-dnsworkbench dns64perfpp dns64perfpp-workbench kxdpgun"
 ENABLED_TOOLS="${ENABLED_TOOLS:-$ALL_TOOLS}"
 
 # --- Interface (for kxdpgun) ---
-KXDPGUN_INTERFACE="${KXDPGUN_INTERFACE:-eth0}"
+KXDPGUN_INTERFACE="${KXDPGUN_INTERFACE:-enp94s0f0np0}"
 
 # --- Input Files ---
-DNSPERF_INPUT="${DNSPERF_INPUT:-${CONFIG_DIR}/dnsperf_input}"
-DNSPYRE_INPUT="${DNSPYRE_INPUT:-${CONFIG_DIR}/dnspyre_input}"
+DNSPERF_INPUT="${DNSPERF_INPUT:-~/dnsperf_input}"
+DNSPYRE_INPUT="${DNSPYRE_INPUT:-~/dnspyre_input}"
 
 # --- Output ---
 RESULTS_DIR="${RESULTS_DIR:-${CONFIG_DIR}/results}"
