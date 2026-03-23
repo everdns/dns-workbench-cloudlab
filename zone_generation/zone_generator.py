@@ -191,7 +191,7 @@ def load_config(config_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate DNS zone files and dnsperf input")
-    parser.add_argument("--config", default=None, help="Path to JSON config file")
+    parser.add_argument("--config", default="config.json", help="Path to JSON config file")
     parser.add_argument("--sld", default=None, help="Second-level domain (default: workbench.lan)")
     parser.add_argument("--base-subnet", default=None, help="Base subnet address (default: 10.0.0.0)")
     parser.add_argument("--num-records", type=int, default=None, help="Number of DNS records to generate (default: 16777216)")
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     print(f"Generating {config['num_records']} records with the following type distribution:")
     for record_type, weight in record_weights.items():
         print(f"  {record_type}: {weight}")
-        
+
     num_files = generate_fqdns_and_ips(
         config['num_ips'], config['num_records'], config['sld'],
         config['base_subnet'], config['out_dir'], config['max_records_per_file'],
