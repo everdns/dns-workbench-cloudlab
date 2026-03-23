@@ -135,7 +135,7 @@ scp_from_server() {
 # Verifies SSH access to both client and server hosts.
 ssh_check_connectivity() {
     log_info "Checking SSH connectivity to client ($CLIENT_HOST)..."
-    log_info "Using $ssh_client to check connectivity..."
+    log_info "Using ssh $SSH_OPTS \"${SSH_USER}@${CLIENT_HOST}\" \"$1\" to check connectivity..."
     if ! ssh_client "echo ok" &>/dev/null; then
         die "Cannot SSH to client host: ${SSH_USER}@${CLIENT_HOST}"
     fi
