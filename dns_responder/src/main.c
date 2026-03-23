@@ -229,10 +229,10 @@ static int load_xdp_program(const char *path, const char *ifname,
 	*xsks_map_fd = bpf_map__fd(map);
 
 	/* Attach XDP program in DRV mode (native), fallback to SKB */
-	ret = bpf_xdp_attach(ifindex, prog_fd, XDP_FLAGS_DRV_MODE, NULL);
+	ret = bpf_set_link_xdp_fd(ifindex, prog_fd, XDP_FLAGS_DRV_MODE);
 	if (ret) {
 		fprintf(stderr, "WARNING: native XDP attach failed, trying SKB mode\n");
-		ret = bpf_xdp_attach(ifindex, prog_fd, XDP_FLAGS_SKB_MODE, NULL);
+		ret = bpf_set_link_xdp_fd(ifindex, prog_fd, XDP_FLAGS_SKB_MODE);
 		if (ret) {
 			fprintf(stderr, "ERROR: XDP attach failed: %s\n",
 				strerror(-ret));
@@ -252,8 +252,8 @@ static void detach_xdp(const char *ifname)
 		return;
 
 	/* Try detaching from both modes */
-	bpf_xdp_detach(ifindex, XDP_FLAGS_DRV_MODE, NULL);
-	bpf_xdp_detach(ifindex, XDP_FLAGS_SKB_MODE, NULL);
+	bpf_set_link_xdp_fd(ifindex, -1, XDP_FLAGS_DRV_MODE);
+	bpf_set_link_xdp_fd(ifindex, -1, XDP_FLAGS_SKB_MODE);
 }
 
 static double timespec_diff(struct timespec *start, struct timespec *end)

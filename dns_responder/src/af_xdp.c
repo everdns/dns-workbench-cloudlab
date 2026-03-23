@@ -319,6 +319,8 @@ void *worker_thread(void *arg)
 			xsk_ring_prod__submit(&xsk->tx, tx_count);
 			kick_tx(xsk);
 			ctx->stats.tx_packets += tx_count;
+			for (uint32_t i = 0; i < tx_count; i++)
+				ctx->stats.tx_bytes += tx_lens[i];
 		}
 	}
 
