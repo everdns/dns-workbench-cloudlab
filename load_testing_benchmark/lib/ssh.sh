@@ -78,9 +78,11 @@ ssh_kill_remote() {
 
     # Send TERM first, then KILL if still alive
     $ssh_func "kill -TERM $pid 2>/dev/null" 2>/dev/null
+    log_info "Sent kill signal to dns_responder (PID: $pid)..."
     sleep 1
     $ssh_func "kill -0 $pid 2>/dev/null && kill -9 $pid 2>/dev/null" 2>/dev/null
-
+    log_info "Sent kill signal to dns_responder (PID: $pid)..."
+    
     # Remove from tracking array
     _remove_tracked_pid "$host_type" "$pid"
 }
