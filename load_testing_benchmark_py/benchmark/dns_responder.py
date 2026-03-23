@@ -86,7 +86,7 @@ def run_dns_responder_session(config, timestamps=False):
     """
     runtime = config["runtime"]
     margin = config["dns_responder_margin"]
-    duration = runtime + margin + 2  # 1s pre-start buffer + 1s safety
+    duration = runtime + margin*2
 
     output_file = "/tmp/dns_responder_output.txt"
     ts_file = "/tmp/dns_responder_timestamps.txt" if timestamps else None
@@ -94,7 +94,7 @@ def run_dns_responder_session(config, timestamps=False):
     proc = start_dns_responder(config, duration, output_file, ts_file)
 
     # Wait for dns_responder to initialize
-    time.sleep(1)
+    time.sleep(margin)
 
     return {
         "proc": proc,
