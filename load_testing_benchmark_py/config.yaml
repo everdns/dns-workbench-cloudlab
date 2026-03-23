@@ -11,7 +11,7 @@ input_files:
 
 dns_responder:
   path: /local/repository/dns_responder/dns_responder
-  xdp_prog: /local/repository/dns_responder/xdp_dns_redirect.o
+  xdp_prog: /local/repository/dns_responder/xdp/xdp_dns_redirect.o
 
 dns_services:
   start_script: /local/repository/start_dns_service.sh
