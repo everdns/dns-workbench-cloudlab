@@ -133,8 +133,8 @@ else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))
 
 #Try to install collectl for monitoring on both resolver and name server
-node_NS_Local.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
-node_Resolver.addService(pg.Execute('sh','/local/repository/install_collectl.sh'))
+node_NS_Local.addService(pg.Execute('sh','/local/repository/tool_install/install_collectl.sh'))
+node_Resolver.addService(pg.Execute('sh','/local/repository/tool_install/install_collectl.sh'))
 
 for i in range(params.num_testers):
     node = request.RawPC("test_host_" + str(i))
