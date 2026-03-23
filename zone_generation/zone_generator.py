@@ -218,8 +218,7 @@ if __name__ == "__main__":
 
     
     print(f"Generating {config['num_records']} records with the following type distribution:")
-    for record_type, weight in record_weights.items():
-        print(f"  {record_type}: {weight}")
+    print(config)
 
     num_files = generate_fqdns_and_ips(
         config['num_ips'], config['num_records'], config['sld'],
