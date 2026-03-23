@@ -1,6 +1,5 @@
 #!/bin/sh
 MULTIPLE_IFACE="${1:-false}"
-sudo apt update -y
 sudo wget https://nlnetlabs.nl/downloads/nsd/nsd-4.14.1.tar.gz -O /opt/nsd-4.14.1.tar.gz
 sudo tar -xzf /opt/nsd-4.14.1.tar.gz -C /opt
 sudo apt install -y build-essential libssl-dev libevent-dev bison flex

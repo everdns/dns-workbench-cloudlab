@@ -1,6 +1,5 @@
 #!/bin/sh
 MULTIPLE_IFACE="${1:-false}"
-sudo apt-get update
 sudo apt-get -y install apt-transport-https ca-certificates wget
 sudo wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
 echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/knot-dns jammy main" | sudo tee /etc/apt/sources.list.d/cznic-labs-knot-dns.list 
