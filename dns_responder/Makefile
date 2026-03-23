@@ -6,7 +6,8 @@ CC        ?= gcc
 CFLAGS     = -O2 -Wall -Wextra -Wno-unused-parameter -pthread -g
 LDFLAGS    = -lxdp -lbpf -lpthread -lelf -lz
 
-BPF_CFLAGS = -O2 -g -target bpf -D__TARGET_ARCH_x86
+BPF_CFLAGS = -O2 -g -target bpf -D__TARGET_ARCH_x86 \
+             -I/usr/include/x86_64-linux-gnu
 
 # Source files
 SRCS       = src/main.c src/af_xdp.c src/dns.c src/stats.c src/net.c
