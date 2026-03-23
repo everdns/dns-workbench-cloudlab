@@ -23,7 +23,15 @@ import subprocess
 import sys
 import time
 
-from bcc import BPF, XDPFlags
+from bcc import BPF
+try:
+    from bcc import XDPFlags
+except ImportError:
+    # Older BCC versions don't export XDPFlags; define manually
+    class XDPFlags:
+        SKB_MODE = 1 << 1
+        DRV_MODE = 1 << 2
+        HW_MODE = 1 << 3
 
 # eBPF C source — XDP (RX) and TC (TX) programs
 BPF_SOURCE = r"""
