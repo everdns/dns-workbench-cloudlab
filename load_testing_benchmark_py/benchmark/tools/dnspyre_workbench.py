@@ -12,7 +12,7 @@ class DnspyreWorkbench(Tool):
     def build_command(self, config, qps):
         resolver = config["resolver"]
         runtime = config["runtime"]
-        threads = config["threads"]
+        threads = config["dnspyre_workers"]
         timeout = config["timeout"]
         # Note: dnspyre-dnsworkbench uses dnsperf_input format
         input_file = config["input_files"]["dnsperf"]

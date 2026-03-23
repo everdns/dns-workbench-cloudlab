@@ -20,6 +20,7 @@ def apply_cli_overrides(config, args):
         "server_interface": args.server_interface,
         "client_interface": args.client_interface,
         "threads": args.threads,
+        "dnspyre_workers": args.dnspyre_workers,
         "ports_per_thread": args.ports_per_thread,
         "timeout": args.timeout,
         "subnet": args.subnet,
@@ -55,6 +56,7 @@ def add_common_args(parser):
     parser.add_argument("--dnsperf-input", help="Path to dnsperf input file")
     parser.add_argument("--dnspyre-input", help="Path to dnspyre input file")
     parser.add_argument("--threads", type=int, help="Number of threads")
+    parser.add_argument("--dnspyre-workers", type=int, help="Number of workers for dnspyre tools (replaces threads)")
     parser.add_argument("--ports-per-thread", type=int, help="Ports per thread")
     parser.add_argument("--timeout", type=int, help="Query timeout in seconds")
     parser.add_argument("--subnet", help="Subnet for dns64perf++")

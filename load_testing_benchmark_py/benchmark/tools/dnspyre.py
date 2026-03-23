@@ -24,7 +24,7 @@ class Dnspyre(Tool):
     def build_command(self, config, qps):
         resolver = config["resolver"]
         runtime = config["runtime"]
-        threads = config["threads"]
+        threads = config["dnspyre_workers"]
         timeout = config["timeout"]
         input_file = config["input_files"]["dnspyre"]
 

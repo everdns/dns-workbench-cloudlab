@@ -1,18 +1,18 @@
 hosts:
-  server: user@server-host
+  server: 10.10.1.2
   client: localhost
 
-resolver: "10.0.0.1"
-server_interface: eth0
-client_interface: eth0
+resolver: 10,10.1.2
+server_interface: enp94s0f0np0
+client_interface: enp94s0f0np0
 
 input_files:
-  dnsperf: dnsperf_input
-  dnspyre: dnspyre_input
+  dnsperf: ~/dnsperf_input
+  dnspyre: ~/dnspyre_input
 
 dns_responder:
-  path: dns_responder
-  xdp_prog: "./xdp/xdp_dns_redirect.o"
+  path: /local/repository/dns_responder/dns_responder
+  xdp_prog: /local/repository/dns_responder/xdp_dns_redirect.o
 
 dns_services:
   start_script: /local/repository/start_dns_service.sh
@@ -25,9 +25,10 @@ dns_services:
     - unbound-resolver
 
 threads: 20
+dnspyre_workers: 40
 ports_per_thread: 30
 timeout: 1
-subnet: "10.0.0.0/10"
+subnet: "10.0.0.0/4"
 runtime: 10
 dns_responder_margin: 5
 pause_between_runs: 5
@@ -35,8 +36,8 @@ max_delay_between_bursts: 10000000
 
 script1:
   start_qps: 200000
-  qps_step: 10000
-  max_qps: 5000000
+  qps_step: 100000
+  max_qps: 3000000
 
 script2:
   accuracy_min_qps: 100000
