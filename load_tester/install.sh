@@ -6,6 +6,8 @@ sudo apt install golang -y
 sudo mkdir -p /opt/go && sudo chown -R $USER /opt/go
 GOPATH=/opt/go PATH=$PATH:/opt/go/bin go install github.com/tantalor93/dnspyre/v3@latest
 GOPATH=/opt/go PATH=$PATH:/opt/go/bin go install github.com/everdns/dnspyre-dnsworkbench@latest
+sudo cp /opt/go/bin/dnspyre /usr/local/bin/
+sudo cp /opt/go/bin/dnspyre-dnsworkbench /usr/local/bin/
 sudo apt install -y autoconf automake libtool  libssl-dev libldns-dev libck-dev libnghttp2-dev
 sudo git clone https://codeberg.org/DNS-OARC/dnsperf.git /opt/dnsperf
 cd /opt/dnsperf && sudo ./autogen.sh && sudo ./configure
