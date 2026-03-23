@@ -180,7 +180,8 @@ static int detect_queue_count(const char *ifname)
  * Attaches the XDP program to the interface.
  */
 static int load_xdp_program(const char *path, const char *ifname,
-			    struct bpf_object **obj_out, int *xsks_map_fd)
+			    struct bpf_object **obj_out, int *xsks_map_fd,
+			    uint32_t *xdp_flags_used)
 {
 	struct bpf_object *obj;
 	struct bpf_program *prog;
@@ -239,6 +240,9 @@ static int load_xdp_program(const char *path, const char *ifname,
 			bpf_object__close(obj);
 			return -1;
 		}
+		*xdp_flags_used = XDP_FLAGS_SKB_MODE;
+	} else {
+		*xdp_flags_used = XDP_FLAGS_DRV_MODE;
 	}
 
 	*obj_out = obj;
@@ -312,12 +316,14 @@ int main(int argc, char **argv)
 	sigaction(SIGTERM, &sa, NULL);
 
 	/* Load and attach XDP program */
+	uint32_t xdp_flags = 0;
 	fprintf(stderr, "Loading XDP program from %s...\n", cfg.xdp_prog_path);
 	if (load_xdp_program(cfg.xdp_prog_path, cfg.ifname,
-			     &bpf_obj, &xsks_map_fd) < 0)
+			     &bpf_obj, &xsks_map_fd, &xdp_flags) < 0)
 		goto cleanup;
 
-	fprintf(stderr, "XDP program attached to %s\n", cfg.ifname);
+	fprintf(stderr, "XDP program attached to %s (%s mode)\n", cfg.ifname,
+		xdp_flags == XDP_FLAGS_DRV_MODE ? "native" : "SKB");
 
 	/* Allocate worker contexts and thread handles */
 	workers = calloc(cfg.num_queues, sizeof(struct worker_ctx));
@@ -327,13 +333,21 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Determine XDP/bind flags */
-	uint32_t xdp_flags = 0; /* managed by libbpf attach above */
+	/* Determine bind flags — zero-copy requires native (DRV) mode */
 	uint16_t bind_flags = 0;
-	if (cfg.zerocopy >= 1)
-		bind_flags = XDP_ZEROCOPY;
-	else
+	if (xdp_flags == XDP_FLAGS_SKB_MODE) {
+		if (cfg.zerocopy == 2) {
+			fprintf(stderr,
+				"ERROR: zero-copy forced but XDP is in SKB mode "
+				"(not supported)\n");
+			goto cleanup;
+		}
 		bind_flags = XDP_COPY;
+	} else if (cfg.zerocopy >= 1) {
+		bind_flags = XDP_ZEROCOPY;
+	} else {
+		bind_flags = XDP_COPY;
+	}
 
 	/* Initialize per-queue UMEM and AF_XDP sockets */
 	int record_ts = cfg.timestamps_path[0] != '\0';
