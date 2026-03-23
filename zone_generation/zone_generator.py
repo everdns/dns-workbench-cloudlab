@@ -216,6 +216,11 @@ if __name__ == "__main__":
     if not os.path.exists(config['out_dir']):
         os.makedirs(config['out_dir'])
 
+    
+    print(f"Generating {config['num_records']} records with the following type distribution:")
+    for record_type, weight in record_weights.items():
+        print(f"  {record_type}: {weight}")
+        
     num_files = generate_fqdns_and_ips(
         config['num_ips'], config['num_records'], config['sld'],
         config['base_subnet'], config['out_dir'], config['max_records_per_file'],
