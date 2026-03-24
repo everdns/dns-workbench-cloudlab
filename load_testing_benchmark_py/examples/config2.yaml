@@ -1,0 +1,51 @@
+hosts:
+  server: 10.10.1.2
+  client: localhost
+
+server_interface: enp94s0f0np0
+client_interface: enp94s0f0np0
+
+input_files:
+  dnsperf: /local/repository/dnsperf_input
+  dnspyre: /local/repository/dnspyre_input
+
+dns_responder:
+  path: /local/repository/dns_responder/dns_responder
+  xdp_prog: /local/repository/dns_responder/xdp/xdp_dns_redirect.o
+
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+  services:
+    - bind-resolver
+    - powerdns-resolver
+    - knot-resolver
+    - nsd-ns
+    - unbound-resolver
+
+threads: 20
+dnspyre_workers: 600
+ports_per_thread: 30
+timeout: 1
+subnet: "10.0.0.0/4"
+runtime: 10
+dns_responder_margin: 20
+pause_between_runs: 5
+max_delay_between_bursts: 10000000
+
+script1:
+  start_qps: 100000
+  qps_step: 100000
+  max_qps: 2000000
+
+script2:
+  accuracy_min_qps: 100000
+  accuracy_max_qps: 1000000
+  accuracy_step: 50000
+  trials: 5
+
+script3:
+  min_qps: 100000
+  max_qps: 2000000
+  qps_step: 50000
+  trials: 3
