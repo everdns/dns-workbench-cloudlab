@@ -117,6 +117,21 @@ def scp_from(host, remote_path, local_path):
             check=True, capture_output=True, text=True,
         )
 
+def scp_first_last_lines(host, remote_path, local_path, num_lines=5):
+    """Copy only the first and last `num_lines` from a remote or local file to local_path."""
+    if is_local(host):
+        # Local file
+        cmd = f"(head -n {num_lines} {remote_path}; tail -n {num_lines} {remote_path}) > {local_path}"
+        subprocess.run(cmd, shell=True, check=True)
+    else:
+        # Remote file
+        log.debug("SCP first/last %d lines from %s:%s -> %s", num_lines, host, remote_path, local_path)
+        cmd = (
+            f"ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new {host} "
+            f"'(head -n {num_lines} {remote_path}; tail -n {num_lines} {remote_path})'"
+        )
+        with open(local_path, "w") as f:
+            subprocess.run(cmd, shell=True, check=True, stdout=f, text=True)
 
 def scp_to(host, local_path, remote_path):
     """Copy a file from local to remote host."""

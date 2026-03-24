@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from benchmark.remote import is_local, scp_from, ssh_run, ssh_run_background
+from benchmark.remote import is_local, scp_first_last_lines, scp_from, ssh_run, ssh_run_background
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def wait_dns_responder(proc, timeout=None):
 
 
 def collect_dns_responder_output(config, remote_output_file, local_dir,
-                                  remote_timestamps_file=None):
+                                  remote_timestamps_file=None, timestamps_lines=None):
     """SCP dns_responder output (and optionally timestamps) back to local host.
 
     Returns (local_output_path, local_timestamps_path or None).
@@ -74,7 +74,10 @@ def collect_dns_responder_output(config, remote_output_file, local_dir,
     local_ts = None
     if remote_timestamps_file:
         local_ts = os.path.join(local_dir, os.path.basename(remote_timestamps_file))
-        scp_from(server, remote_timestamps_file, local_ts)
+        if timestamps_lines is None:
+            scp_from(server, remote_timestamps_file, local_ts)
+        else:
+            scp_first_last_lines(server, remote_timestamps_file, local_ts, num_lines=5)
 
     return local_output, local_ts
 

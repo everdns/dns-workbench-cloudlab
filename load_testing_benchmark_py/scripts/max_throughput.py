@@ -64,7 +64,7 @@ def run_single_test(config, tool, qps, store, script_name):
 
     try:
         # Run the load tool on client
-        tool_timeout = config["runtime"] + 60
+        tool_timeout = config["runtime"] + 120
         try:
             result = ssh_run(client, cmd, timeout=tool_timeout)
             tool_stdout = result.stdout
@@ -90,7 +90,7 @@ def run_single_test(config, tool, qps, store, script_name):
 
         # Wait for dns_responder to finish
         wait_dns_responder(
-            session["proc"], timeout=session["duration"] + 60
+            session["proc"], timeout=session["duration"] + 120
         )
 
         # Collect dns_responder output and timestamps from server
@@ -99,6 +99,7 @@ def run_single_test(config, tool, qps, store, script_name):
         output_path, ts_path = collect_dns_responder_output(
             config, session["output_file"], local_raw_dir,
             session["timestamps_file"],
+            timestamps_lines=5,
         )
         with open(output_path) as f:
             resp_text = f.read()
