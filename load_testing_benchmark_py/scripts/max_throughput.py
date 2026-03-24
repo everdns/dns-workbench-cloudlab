@@ -28,9 +28,8 @@ from benchmark.dns_responder import (
 from benchmark.remote import ssh_run
 from benchmark.results import (
     ResultStore,
-    compute_actual_runtime,
     parse_dns_responder_output,
-    read_timestamps_file,
+    read_first_last_timestamp,
 )
 from benchmark.tools import get_tools
 
@@ -61,7 +60,7 @@ def run_single_test(config, tool, qps, store, script_name):
 
     try:
         # Run the load tool on client
-        tool_timeout = config["runtime"] + 30
+        tool_timeout = config["runtime"] + 60
         result = ssh_run(client, cmd, timeout=tool_timeout)
 
         tool_stdout = result.stdout
@@ -81,7 +80,7 @@ def run_single_test(config, tool, qps, store, script_name):
 
         # Wait for dns_responder to finish
         wait_dns_responder(
-            session["proc"], timeout=session["duration"] + 30
+            session["proc"], timeout=session["duration"] + 60
         )
 
         # Collect dns_responder output and timestamps from server
@@ -109,19 +108,20 @@ def run_single_test(config, tool, qps, store, script_name):
         os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
         os.rename(ts_path, ts_dest)
 
-        timestamps = read_timestamps_file(ts_dest)
-        actual_runtime = compute_actual_runtime(timestamps)
-        log.info("Actual runtime from timestamps: %.3fs", actual_runtime)
+        actual_runtime_ns = read_first_last_timestamp(ts_dest)
+        log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
 
         # Parse outputs
         tool_result = tool.parse_output(tool_stdout)
         resp_result = parse_dns_responder_output(resp_text)
 
+        actual_qps = (resp_result.rx_total / actual_runtime_ns * 1e9) if actual_runtime_ns else 0.0
+
         row = {
             "tool": tool.name,
             "requested_qps": qps,
-            "achieved_qps_responder": resp_result.avg_rx_pps,
-            "actual_runtime_s": actual_runtime,
+            "achieved_qps_responder": actual_qps,
+            "actual_runtime_ns": actual_runtime_ns,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,

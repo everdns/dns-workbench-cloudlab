@@ -109,8 +109,8 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         os.rename(ts_path, ts_dest)
 
         timestamps = read_timestamps_file(ts_dest)
-        actual_runtime = compute_actual_runtime(timestamps)
-        log.info("Actual runtime from timestamps: %.3fs", actual_runtime)
+        actual_runtime_ns = compute_actual_runtime(timestamps)
+        log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
         accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"])
 
         rows = []
@@ -120,7 +120,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
                 "target_qps": qps,
                 "trial": trial + 1,
                 "interval": label,
-                "actual_runtime_s": actual_runtime,
+                "actual_runtime_ns": actual_runtime_ns,
                 "mean_qps": round(metrics.mean_qps, 2),
                 "stddev": round(metrics.stddev, 2),
                 "max_deviation": round(metrics.max_deviation, 2),

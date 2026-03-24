@@ -34,9 +34,9 @@ pause_between_runs: 5
 max_delay_between_bursts: 10000000
 
 script1:
-  start_qps: 200000
+  start_qps: 100000
   qps_step: 100000
-  max_qps: 3000000
+  max_qps: 2000000
 
 script2:
   accuracy_min_qps: 100000

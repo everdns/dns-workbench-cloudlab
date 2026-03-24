@@ -22,10 +22,14 @@ def plot_max_throughput(results, output_dir):
         by_tool[tool][0].append(row["requested_qps"])
         by_tool[tool][1].append(row["achieved_qps_responder"])
 
+    LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2)), (0, (1, 1)), (0, (3, 5, 1, 5))]
+    MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
+
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    for tool, (x, y) in sorted(by_tool.items()):
-        ax.plot(x, y, marker="o", markersize=3, label=tool)
+    for i, (tool, (x, y)) in enumerate(sorted(by_tool.items())):
+        ax.plot(x, y, marker=MARKERS[i % len(MARKERS)], markersize=4,
+                linestyle=LINE_STYLES[i % len(LINE_STYLES)], linewidth=1.5, label=tool)
 
     # Plot ideal line (y=x)
     all_x = [row["requested_qps"] for row in results]

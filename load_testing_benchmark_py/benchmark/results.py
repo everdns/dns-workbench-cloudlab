@@ -125,30 +125,45 @@ def compute_accuracy_metrics(timestamps_ns, target_qps, runtime_s):
     return results
 
 
-def read_timestamps_file(path):
-    """Read a dns_responder timestamps file, returning list of int nanoseconds."""
-    timestamps = []
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            timestamps.append(int(line))
-    return timestamps
+def read_first_last_timestamp(path):
+    """Read only the first and last timestamps from a file, returning runtime in ns.
 
-
-def compute_actual_runtime(timestamps_ns):
-    """Compute actual run time from first and last timestamps.
-
-    Args:
-        timestamps_ns: list of nanosecond timestamps (ints)
-
-    Returns:
-        float: actual runtime in seconds, or 0.0 if insufficient data
+    Uses subprocess head/tail to avoid reading the entire file.
     """
-    if len(timestamps_ns) < 2:
-        return 0.0
-    return (timestamps_ns[-1] - timestamps_ns[0]) / 1_000_000_000
+    import subprocess
+
+    try:
+        head_lines = subprocess.check_output(
+            ["head", "-n", "5", path], text=True
+        ).strip().splitlines()
+        tail_lines = subprocess.check_output(
+            ["tail", "-n", "2", path], text=True
+        ).strip().splitlines()
+    except (subprocess.CalledProcessError, OSError):
+        return 0
+
+    first_line = None
+    for line in head_lines:
+        line = line.strip()
+        if line and not line.startswith("#"):
+            first_line = line
+            break
+
+    last_line = None
+    for line in reversed(tail_lines):
+        line = line.strip()
+        if line:
+            last_line = line
+            break
+
+    if not first_line or not last_line:
+        return 0
+
+    first = int(first_line)
+    last = int(last_line)
+    if first == last:
+        return 0
+    return last - first
 
 
 class ResultStore:

@@ -15,7 +15,7 @@ class Kxdpgun(Tool):
         interface = config["client_interface"]
 
         return (
-            f"kxdpgun -t {runtime} -Q {qps} -b 1"
+            f"sudo kxdpgun -t {runtime} -Q {qps} -b 1"
             f" -i {input_file} -I {interface}"
             f" {server}"
         )
