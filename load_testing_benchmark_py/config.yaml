@@ -17,26 +17,26 @@ dns_services:
   start_script: /local/repository/start_dns_service.sh
   stop_script: /local/repository/stop_dns_service.sh
   services:
-    - bind-resolver
-    - powerdns-resolver
-    - knot-resolver
+    - bind-ns
+    - powerdns-ns
+    - knot-ns
     - nsd-ns
-    - unbound-resolver
+    - unbound-ns
 
 threads: 20
-dnspyre_workers: 40
+dnspyre_workers: 600
 ports_per_thread: 30
 timeout: 1
 subnet: "10.0.0.0/4"
 runtime: 10
-dns_responder_margin: 5
+dns_responder_margin: 10
 pause_between_runs: 5
 max_delay_between_bursts: 10000000
 
 script1:
   start_qps: 100000
   qps_step: 100000
-  max_qps: 2000000
+  max_qps: 3000000
 
 script2:
   accuracy_min_qps: 100000
