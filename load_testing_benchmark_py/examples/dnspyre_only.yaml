@@ -23,15 +23,15 @@ dns_services:
     - nsd-ns
     - unbound-resolver
 
-threads: 20
+tools:
+  - dnspyre
+  - dnspyre-workbench
+
 dnspyre_workers: 40
-ports_per_thread: 30
 timeout: 1
-subnet: "10.0.0.0/4"
 runtime: 10
 dns_responder_margin: 5
 pause_between_runs: 5
-max_delay_between_bursts: 10000000
 
 script1:
   start_qps: 200000

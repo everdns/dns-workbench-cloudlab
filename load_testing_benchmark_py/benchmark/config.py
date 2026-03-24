@@ -41,6 +41,9 @@ def apply_cli_overrides(config, args):
         if value is not None:
             config[key] = value
 
+    if args.tools:
+        config["tools"] = args.tools
+
     return config
 
 

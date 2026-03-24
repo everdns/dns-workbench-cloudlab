@@ -61,7 +61,7 @@ def run_single_test(config, tool, qps, store, script_name):
 
     try:
         # Run the load tool on client
-        tool_timeout = config["runtime"] + 60
+        tool_timeout = config["runtime"] + 30
         result = ssh_run(client, cmd, timeout=tool_timeout)
 
         tool_stdout = result.stdout
@@ -166,7 +166,7 @@ def main():
     qps_step = s1["qps_step"]
     max_qps = s1["max_qps"]
 
-    tools = get_tools(args.tools)
+    tools = get_tools(config.get("tools"))
     output_dir = args.output_dir
     script_name = "max_throughput"
     store = ResultStore(output_dir)

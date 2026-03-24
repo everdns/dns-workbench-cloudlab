@@ -169,7 +169,7 @@ def main():
     step = s2["accuracy_step"]
     trials = s2["trials"]
 
-    tools = get_tools(args.tools)
+    tools = get_tools(config.get("tools"))
     output_dir = args.output_dir
     script_name = "qps_accuracy"
     store = ResultStore(output_dir)

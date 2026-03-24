@@ -128,7 +128,7 @@ def main():
     if args.dns_services:
         services = args.dns_services
 
-    tools = get_tools(args.tools)
+    tools = get_tools(config.get("tools"))
     output_dir = args.output_dir
     script_name = "load_impact"
     store = ResultStore(output_dir)
