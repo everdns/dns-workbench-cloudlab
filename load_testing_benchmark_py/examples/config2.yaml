@@ -41,11 +41,21 @@ script1:
 script2:
   accuracy_min_qps: 100000
   accuracy_max_qps: 1000000
-  accuracy_step: 50000
-  trials: 5
+  accuracy_step: 100000
+  trials: 3
 
 script3:
   min_qps: 100000
   max_qps: 2000000
   qps_step: 50000
   trials: 3
+  # Optional per-tool max QPS overrides (falls back to max_qps above)
+  tool_max_qps:
+    dnsperf: 2000000
+    dnsperf-workbench-slice: 2000000
+    dnsperf-workbench-lencse: 2000000
+    dnspyre: 2000000
+    dnspyre-workbench: 2000000
+    dns64perf++: 2000000
+    dns64perfpp-workbench: 2000000
+    kxdpgun: 2000000

@@ -58,24 +58,34 @@ def run_single_test(config, tool, qps, store, script_name):
     # Start dns_responder on server
     session = run_dns_responder_session(config, timestamps=True)
 
+    tool_timed_out = False
+    tool_stdout = ""
+    tool_stderr = ""
+
     try:
         # Run the load tool on client
         tool_timeout = config["runtime"] + 60
-        result = ssh_run(client, cmd, timeout=tool_timeout)
+        try:
+            result = ssh_run(client, cmd, timeout=tool_timeout)
+            tool_stdout = result.stdout
+            tool_stderr = result.stderr
 
-        tool_stdout = result.stdout
-        tool_stderr = result.stderr
-
-        if result.returncode != 0:
-            log.warning("%s returned exit code %d at %d QPS",
-                        tool.name, result.returncode, qps)
-            log.warning("stderr: %s", tool_stderr[:500])
+            if result.returncode != 0:
+                log.warning("%s returned exit code %d at %d QPS",
+                            tool.name, result.returncode, qps)
+                log.warning("stderr: %s", tool_stderr[:500])
+        except subprocess.TimeoutExpired as e:
+            tool_timed_out = True
+            tool_stdout = e.stdout or ""
+            tool_stderr = e.stderr or ""
+            log.warning("%s timed out at %d QPS (killed by ssh_run)", tool.name, qps)
 
         # Save raw tool output
         store.save_raw_output(
             script_name,
             f"{tool.name}_{qps}qps_tool.txt",
-            f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}",
+            f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}"
+            + ("\n=== TIMED OUT ===" if tool_timed_out else ""),
         )
 
         # Wait for dns_responder to finish
@@ -112,9 +122,7 @@ def run_single_test(config, tool, qps, store, script_name):
         log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
 
         # Parse outputs
-        tool_result = tool.parse_output(tool_stdout)
         resp_result = parse_dns_responder_output(resp_text)
-
         actual_qps = (resp_result.rx_total / actual_runtime_ns * 1e9) if actual_runtime_ns else 0.0
 
         row = {
@@ -125,21 +133,26 @@ def run_single_test(config, tool, qps, store, script_name):
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,
-            "tool_reported_qps": tool_result.achieved_qps,
-            "tool_queries_sent": tool_result.queries_sent,
-            "tool_queries_completed": tool_result.queries_completed,
-            "tool_queries_lost": tool_result.queries_lost,
+            "timed_out": tool_timed_out,
         }
 
-        if tool.reports_latency and tool_result.avg_latency is not None:
-            row["avg_latency_s"] = tool_result.avg_latency
+        # Parse tool output — best-effort if timed out (output may be incomplete)
+        try:
+            tool_result = tool.parse_output(tool_stdout)
+            row["tool_reported_qps"] = tool_result.achieved_qps
+            row["tool_queries_sent"] = tool_result.queries_sent
+            row["tool_queries_completed"] = tool_result.queries_completed
+            row["tool_queries_lost"] = tool_result.queries_lost
+            if tool.reports_latency and tool_result.avg_latency is not None:
+                row["avg_latency_s"] = tool_result.avg_latency
+        except Exception:
+            if not tool_timed_out:
+                raise
+            log.info("Could not parse %s output after timeout (expected)", tool.name)
 
         store.add_result(row)
         return row
 
-    except subprocess.TimeoutExpired:
-        log.error("%s timed out at %d QPS", tool.name, qps)
-        return None
     except Exception as e:
         log.error("Error running %s at %d QPS: %s", tool.name, qps, e)
         return None

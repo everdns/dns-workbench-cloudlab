@@ -12,20 +12,70 @@ def is_local(host):
 def ssh_run(host, command, timeout=None, check=False):
     """Run a command on a remote host via SSH, or locally if host is localhost.
 
-    Returns subprocess.CompletedProcess.
+    Returns subprocess.CompletedProcess. On timeout, kills the process (and the
+    remote process if over SSH), then re-raises subprocess.TimeoutExpired with
+    any partial stdout/stderr captured.
     """
     if is_local(host):
         log.debug("Local exec: %s", command)
-        return subprocess.run(
-            command, shell=True, capture_output=True, text=True,
-            timeout=timeout,
+        proc = subprocess.Popen(
+            command, shell=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            log.warning("Local command timed out, killed: %s", command)
+            raise subprocess.TimeoutExpired(
+                command, timeout, output=stdout, stderr=stderr,
+            )
+        return subprocess.CompletedProcess(
+            command, proc.returncode, stdout, stderr,
         )
     else:
         log.debug("SSH exec on %s: %s", host, command)
-        result = subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
-             host, command],
-            capture_output=True, text=True, timeout=timeout,
+        ssh_cmd = [
+            "ssh", "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=accept-new", host, command,
+        ]
+        proc = subprocess.Popen(
+            ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            log.warning("SSH command timed out on %s, killing remote process: %s",
+                        host, command)
+            # Kill the remote process — extract binary name from command
+            binary = command.split()[0]
+            try:
+                subprocess.run(
+                    ["ssh", "-o", "BatchMode=yes",
+                     "-o", "StrictHostKeyChecking=accept-new",
+                     host, f"pkill -f {binary}"],
+                    timeout=10, capture_output=True, text=True,
+                )
+            except Exception:
+                log.warning("pkill failed, trying killall for %s on %s",
+                            binary, host)
+                try:
+                    subprocess.run(
+                        ["ssh", "-o", "BatchMode=yes",
+                         "-o", "StrictHostKeyChecking=accept-new",
+                         host, f"killall -9 {binary}"],
+                        timeout=10, capture_output=True, text=True,
+                    )
+                except Exception:
+                    log.error("Could not kill %s on %s", binary, host)
+            raise subprocess.TimeoutExpired(
+                command, timeout, output=stdout, stderr=stderr,
+            )
+        result = subprocess.CompletedProcess(
+            ssh_cmd, proc.returncode, stdout, stderr,
         )
         if check and result.returncode != 0:
             raise RuntimeError(

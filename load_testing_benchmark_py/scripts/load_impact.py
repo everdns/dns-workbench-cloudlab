@@ -123,6 +123,7 @@ def main():
     max_qps = s3["max_qps"]
     qps_step = s3["qps_step"]
     trials = s3["trials"]
+    tool_max_qps = s3.get("tool_max_qps", {})
 
     services = config["dns_services"]["services"]
     if args.dns_services:
@@ -138,6 +139,8 @@ def main():
     log.info("DNS services: %s", services)
     log.info("QPS range: %d -> %d (step %d), %d trials",
              min_qps, max_qps, qps_step, trials)
+    if tool_max_qps:
+        log.info("Per-tool max QPS overrides: %s", tool_max_qps)
 
     for dns_service in services:
         log.info("=== Testing DNS service: %s ===", dns_service)
@@ -162,6 +165,11 @@ def main():
 
                 for trial in range(trials):
                     for tool in tools:
+                        tool_limit = tool_max_qps.get(tool.name, max_qps)
+                        if qps > tool_limit:
+                            log.debug("Skipping %s at %d QPS (max for tool: %d)",
+                                      tool.name, qps, tool_limit)
+                            continue
                         try:
                             run_impact_test(
                                 config, tool, dns_service, qps, trial,
