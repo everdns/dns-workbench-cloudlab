@@ -125,6 +125,7 @@ def run_single_test(config, tool, qps, store, script_name):
         # Parse outputs
         resp_result = parse_dns_responder_output(resp_text)
         actual_qps = (resp_result.rx_total / actual_runtime_ns * 1e9) if actual_runtime_ns else 0.0
+        log.info("Achieved QPS according to dns_responder: %.2f", actual_qps)
 
         row = {
             "tool": tool.name,
