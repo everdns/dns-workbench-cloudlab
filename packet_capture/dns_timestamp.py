@@ -36,10 +36,19 @@ except ImportError:
 # eBPF C source — XDP (RX) and TC (TX) programs
 BPF_SOURCE = r"""
 #include <uapi/linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
-#include <linux/pkt_cls.h>
+#include <uapi/linux/if_ether.h>
+#include <uapi/linux/ip.h>
+#include <uapi/linux/udp.h>
+#include <uapi/linux/pkt_cls.h>
+
+#define IPPROTO_UDP 17
+
+#ifndef htons
+#define htons(x) __builtin_bswap16(x)
+#endif
+#ifndef ntohs
+#define ntohs(x) __builtin_bswap16(x)
+#endif
 
 struct dns_event {
     u64 timestamp_ns;
@@ -61,7 +70,7 @@ static __always_inline int process_packet(void *data, void *data_end,
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end)
         return -1;
-    if (eth->h_proto != __constant_htons(ETH_P_IP))
+    if (eth->h_proto != htons(ETH_P_IP))
         return -1;
 
     struct iphdr *ip = (void *)(eth + 1);
@@ -74,8 +83,8 @@ static __always_inline int process_packet(void *data, void *data_end,
     if ((void *)(udp + 1) > data_end)
         return -1;
 
-    u16 sport = __constant_ntohs(udp->source);
-    u16 dport = __constant_ntohs(udp->dest);
+    u16 sport = ntohs(udp->source);
+    u16 dport = ntohs(udp->dest);
 
     // Filter: only DNS traffic (port 53)
     if (sport != 53 && dport != 53)
@@ -99,8 +108,8 @@ static __always_inline int process_packet(void *data, void *data_end,
     evt->dst_ip = ip->daddr;
     evt->src_port = sport;
     evt->dst_port = dport;
-    evt->dns_txid = __constant_ntohs(dns_txid);
-    evt->pkt_size = __constant_ntohs(ip->tot_len) + sizeof(struct ethhdr);
+    evt->dns_txid = ntohs(dns_txid);
+    evt->pkt_size = ntohs(ip->tot_len) + sizeof(struct ethhdr);
     evt->direction = direction;
     evt->qr_flag = qr_flag;
     evt->pad[0] = 0;
