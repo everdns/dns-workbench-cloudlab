@@ -6,10 +6,11 @@
     "num_ips": 16777216,
     "out_dir": "output",
     "record_weights": {
-        "A": 63,
-        "AAAA": 20,
+        "A": 62,
+        "AAAA": 21,
         "HTTPS": 8,
-        "CNAME": 2,
-        "MX": 2
+        "ANY": 1,
+        "NS": 1,
+        "TXT": 1
     }
 }

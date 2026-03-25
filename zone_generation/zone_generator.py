@@ -65,9 +65,10 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
 
     if sum(remaining_record_counts.values()) < remaining_records_count:
         # If due to rounding we have fewer records than needed, add the remaining ones to the most common type
-        remaining_record_counts['A'] += remaining_records_count - sum(remaining_record_counts.values())
+        most_common = max(record_weights, key=record_weights.get)
+        remaining_record_counts[most_common] += remaining_records_count - sum(remaining_record_counts.values())
 
-    primary_pattern = generate_interleaved_record_types_pattern(dict.copy(record_weights), types_order)
+    primary_pattern = generate_interleaved_record_types_pattern(record_weights.copy(), types_order)
     remaining_pattern = generate_interleaved_record_types_pattern(remaining_record_counts, types_order)
     main_pattern_record_count = iters_through_main_record_pattern * len(primary_pattern)
 
@@ -138,6 +139,20 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
             elif record_type == 'CNAME':
                 target_fqdn = f"canonical-{padded_octets}.{sld}"
                 entry = get_zone_file_entry(fqdn, target_fqdn, 'CNAME')
+            elif record_type == 'ANY':
+                # For ANY, we can just create an A record as a placeholder since ANY is not actually stored in zone files
+                data = str(ip_addr)
+                entry = get_zone_file_entry(fqdn, data, 'A')
+            elif record_type == 'NS':
+                ns_target = f"ns{i % 10 + 1}.{sld}"
+                entry = get_zone_file_entry(fqdn, ns_target, 'NS')
+            elif record_type == 'TXT':
+                txt_data = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
+                entry = get_zone_file_entry(fqdn, txt_data, 'TXT')
+            else:
+                # Default to A record if type is unrecognized
+                data = str(ip_addr)
+                entry = get_zone_file_entry(fqdn, data, 'A')
 
             # Write to zone file
             zone_file.write(entry)
@@ -181,6 +196,10 @@ def get_zone_file_entry(fqdn, data, record_type='A'):
         return f"{fqdn}.  IN  HTTPS  {priority} . alpn=\"{alpn}\"\n"
     elif record_type == 'CNAME':
         return f"{fqdn}.  IN  CNAME  {data}.\n"
+    elif record_type == 'NS':  
+        return f"{fqdn}.  IN  NS  {data}.\n"
+    elif record_type == 'TXT':
+        return f"{fqdn}.  IN  TXT  \"{data}\"\n"
     else:
         return f"{fqdn}.  IN  {record_type}  {data}\n"
 

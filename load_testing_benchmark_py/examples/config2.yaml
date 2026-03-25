@@ -54,8 +54,8 @@ script3:
     dnsperf: 2000000
     dnsperf-workbench-slice: 2000000
     dnsperf-workbench-lencse: 2000000
-    dnspyre: 2000000
-    dnspyre-workbench: 2000000
+    dnspyre: 300000
+    dnspyre-workbench: 300000
     dns64perf++: 2000000
     dns64perfpp-workbench: 2000000
     kxdpgun: 2000000
