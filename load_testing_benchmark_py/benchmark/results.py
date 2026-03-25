@@ -145,6 +145,32 @@ def compute_accuracy_metrics(timestamps_ns, target_qps, runtime_s):
     return results
 
 
+def read_timestamps_file(path):
+    """Read all nanosecond timestamps from a file, skipping comments and blanks.
+
+    Returns:
+        list of int (nanosecond timestamps)
+    """
+    timestamps = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                timestamps.append(int(line))
+    return timestamps
+
+
+def compute_actual_runtime(timestamps_ns):
+    """Compute runtime in nanoseconds from a list of timestamps.
+
+    Returns:
+        int: last - first timestamp in nanoseconds, or 0 if insufficient data
+    """
+    if len(timestamps_ns) < 2:
+        return 0
+    return timestamps_ns[-1] - timestamps_ns[0]
+
+
 def read_first_last_timestamp(path):
     """Read only the first and last timestamps from a file, returning runtime in ns.
 
