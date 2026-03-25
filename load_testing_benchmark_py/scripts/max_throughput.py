@@ -29,7 +29,6 @@ from benchmark.remote import ssh_run
 from benchmark.results import (
     ResultStore,
     parse_dns_responder_output,
-    read_first_last_timestamp,
 )
 from benchmark.tools import get_tools
 
@@ -93,45 +92,30 @@ def run_single_test(config, tool, qps, store, script_name):
             session["proc"], timeout=session["duration"] + 120
         )
 
-        # Collect dns_responder output and timestamps from server
+        # Collect dns_responder output from server
         local_raw_dir = os.path.join(store.output_dir, script_name, "raw")
         os.makedirs(local_raw_dir, exist_ok=True)
-        output_path, ts_path = collect_dns_responder_output(
+        output_path, _ = collect_dns_responder_output(
             config, session["output_file"], local_raw_dir,
-            session["timestamps_file"],
-            timestamps_lines=5,
         )
         with open(output_path) as f:
             resp_text = f.read()
-
-        if not ts_path:
-            raise RuntimeError("Failed to retrieve timestamps file from server")
 
         store.save_raw_output(
             script_name, f"{tool.name}_{qps}qps_responder.txt", resp_text,
         )
 
-        # Save timestamps file and compute actual runtime
-        ts_dest = os.path.join(
-            store.output_dir, script_name, "timestamps",
-            f"{tool.name}_{qps}qps_timestamps.txt",
-        )
-        os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
-        os.rename(ts_path, ts_dest)
-
-        actual_runtime_ns = read_first_last_timestamp(ts_dest)
-        log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
-
-        # Parse outputs
+        # Parse outputs — RX QPS is computed by dns_responder via -T flag
         resp_result = parse_dns_responder_output(resp_text)
-        actual_qps = (resp_result.rx_total / actual_runtime_ns * 1e9) if actual_runtime_ns else 0.0
-        log.info("Achieved QPS according to dns_responder: %.2f", actual_qps)
+        actual_qps = resp_result.rx_qps
+        log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
+                 actual_qps, resp_result.actual_duration_secs)
 
         row = {
             "tool": tool.name,
             "requested_qps": qps,
             "achieved_qps_responder": actual_qps,
-            "actual_runtime_ns": actual_runtime_ns,
+            "actual_duration_secs": resp_result.actual_duration_secs,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,

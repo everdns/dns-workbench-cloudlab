@@ -1,9 +1,24 @@
 import os
 from collections import defaultdict
 
+import math
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+
+def _trial_mean_std(rows, key):
+    """Return (mean, stddev) of rows[key] across trials."""
+    vals = [r[key] for r in rows]
+    n = len(vals)
+    mean = sum(vals) / n
+    if n > 1:
+        variance = sum((v - mean) ** 2 for v in vals) / (n - 1)
+        std = math.sqrt(variance)
+    else:
+        std = 0.0
+    return mean, std
 
 
 def plot_max_throughput(results, output_dir):
@@ -72,12 +87,13 @@ def plot_qps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["mean_qps"] for r in rows) / len(rows)
-                y_mean.append(avg)
-            ax.plot(x_vals, y_mean, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "mean_qps")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         if x_vals:
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
@@ -97,12 +113,13 @@ def plot_qps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_std = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["stddev"] for r in rows) / len(rows)
-                y_std.append(avg)
-            ax.plot(x_vals, y_std, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "stddev")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"QPS Standard Deviation ({interval} intervals)")
@@ -118,12 +135,13 @@ def plot_qps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_maxdev = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["max_deviation"] for r in rows) / len(rows)
-                y_maxdev.append(avg)
-            ax.plot(x_vals, y_maxdev, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "max_deviation")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"Max Deviation from Target ({interval} intervals)")
@@ -159,15 +177,15 @@ def plot_pps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean = []
-            y_expected = []
+            y_mean, y_err, y_expected = [], [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["mean_pps"] for r in rows) / len(rows)
-                exp = rows[0]["expected_pps"]
-                y_mean.append(avg)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "mean_pps")
+                exp = by_tool_qps[tool][qps][0]["expected_pps"]
+                y_mean.append(mean)
+                y_err.append(std)
                 y_expected.append(exp)
-            ax.plot(x_vals, y_mean, marker="o", markersize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         if x_vals and y_expected:
             ax.plot(x_vals, y_expected, "--", color="gray", alpha=0.5, label="Expected")
@@ -186,12 +204,13 @@ def plot_pps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_std = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["pps_stddev"] for r in rows) / len(rows)
-                y_std.append(avg)
-            ax.plot(x_vals, y_std, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "pps_stddev")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"PPS Standard Deviation ({interval} intervals)")
@@ -207,12 +226,13 @@ def plot_pps_accuracy(results, output_dir):
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_maxdev = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["pps_max_deviation"] for r in rows) / len(rows)
-                y_maxdev.append(avg)
-            ax.plot(x_vals, y_maxdev, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "pps_max_deviation")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
+                        capsize=3, label=tool)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"Max PPS Deviation from Expected ({interval} intervals)")

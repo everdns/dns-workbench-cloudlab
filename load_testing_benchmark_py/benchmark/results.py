@@ -29,6 +29,8 @@ class DnsResponderResult:
     drops: int = 0
     avg_rx_pps: float = 0.0
     avg_tx_pps: float = 0.0
+    rx_qps: float = 0.0
+    actual_duration_secs: float = 0.0
     raw_output: str = ""
 
 
@@ -66,6 +68,8 @@ def parse_dns_responder_output(text):
     result.drops = parse_int(r"Drops:\s+([\d,]+)")
     result.avg_rx_pps = parse_float(r"Avg RX:\s+([\d,.]+)\s+pps")
     result.avg_tx_pps = parse_float(r"Avg TX:\s+([\d,.]+)\s+pps")
+    result.rx_qps = parse_float(r"RX QPS:\s+([\d,.]+)\s+qps")
+    result.actual_duration_secs = parse_float(r"Actual traffic window:\s+([\d,.]+)s")
 
     return result
 
