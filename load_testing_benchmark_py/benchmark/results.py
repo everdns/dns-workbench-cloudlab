@@ -38,6 +38,10 @@ class AccuracyMetrics:
     mean_qps: float = 0.0
     stddev: float = 0.0
     max_deviation: float = 0.0
+    expected_pps: float = 0.0
+    mean_pps: float = 0.0
+    pps_stddev: float = 0.0
+    pps_max_deviation: float = 0.0
 
 
 def parse_dns_responder_output(text):
@@ -115,11 +119,23 @@ def compute_accuracy_metrics(timestamps_ns, target_qps, runtime_s):
         stddev = variance ** 0.5
         max_dev = max(abs(v - target_qps) for v in qps_values)
 
+        # PPS: raw packet counts per interval
+        expected_pps = target_qps * seconds_per_interval
+        pps_values = trimmed  # raw counts per interval
+        pps_mean = sum(pps_values) / n
+        pps_variance = sum((v - pps_mean) ** 2 for v in pps_values) / n
+        pps_stddev = pps_variance ** 0.5
+        pps_max_dev = max(abs(v - expected_pps) for v in pps_values)
+
         results[label] = AccuracyMetrics(
             interval_ms=interval_ms,
             mean_qps=mean,
             stddev=stddev,
             max_deviation=max_dev,
+            expected_pps=expected_pps,
+            mean_pps=pps_mean,
+            pps_stddev=pps_stddev,
+            pps_max_deviation=pps_max_dev,
         )
 
     return results

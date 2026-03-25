@@ -136,6 +136,95 @@ def plot_qps_accuracy(results, output_dir):
         plt.close(fig)
 
 
+def plot_pps_accuracy(results, output_dir):
+    """Plot PPS accuracy metrics per tool and interval (Script 2).
+
+    Args:
+        results: list of dicts with keys: tool, target_qps, interval,
+                 expected_pps, mean_pps, pps_stddev, pps_max_deviation
+        output_dir: directory to save charts
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    intervals = set(row["interval"] for row in results if row["interval"] != "N/A")
+
+    for interval in sorted(intervals):
+        by_tool_qps = defaultdict(lambda: defaultdict(list))
+        for row in results:
+            if row["interval"] != interval:
+                continue
+            by_tool_qps[row["tool"]][row["target_qps"]].append(row)
+
+        # --- Mean PPS chart ---
+        fig, ax = plt.subplots(figsize=(12, 7))
+        for tool in sorted(by_tool_qps.keys()):
+            x_vals = sorted(by_tool_qps[tool].keys())
+            y_mean = []
+            y_expected = []
+            for qps in x_vals:
+                rows = by_tool_qps[tool][qps]
+                avg = sum(r["mean_pps"] for r in rows) / len(rows)
+                exp = rows[0]["expected_pps"]
+                y_mean.append(avg)
+                y_expected.append(exp)
+            ax.plot(x_vals, y_mean, marker="o", markersize=3, label=tool)
+
+        if x_vals and y_expected:
+            ax.plot(x_vals, y_expected, "--", color="gray", alpha=0.5, label="Expected")
+
+        ax.set_xlabel("Target QPS")
+        ax.set_ylabel(f"Mean PPS ({interval} intervals)")
+        ax.set_title(f"PPS Accuracy: Mean Achieved vs Expected ({interval})")
+        ax.legend(loc="upper left", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+        path = os.path.join(output_dir, f"pps_mean_{interval}.png")
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        # --- PPS StdDev chart ---
+        fig, ax = plt.subplots(figsize=(12, 7))
+        for tool in sorted(by_tool_qps.keys()):
+            x_vals = sorted(by_tool_qps[tool].keys())
+            y_std = []
+            for qps in x_vals:
+                rows = by_tool_qps[tool][qps]
+                avg = sum(r["pps_stddev"] for r in rows) / len(rows)
+                y_std.append(avg)
+            ax.plot(x_vals, y_std, marker="o", markersize=3, label=tool)
+
+        ax.set_xlabel("Target QPS")
+        ax.set_ylabel(f"PPS Standard Deviation ({interval} intervals)")
+        ax.set_title(f"PPS Accuracy: Standard Deviation ({interval})")
+        ax.legend(loc="upper left", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+        path = os.path.join(output_dir, f"pps_stddev_{interval}.png")
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        # --- PPS Max Deviation chart ---
+        fig, ax = plt.subplots(figsize=(12, 7))
+        for tool in sorted(by_tool_qps.keys()):
+            x_vals = sorted(by_tool_qps[tool].keys())
+            y_maxdev = []
+            for qps in x_vals:
+                rows = by_tool_qps[tool][qps]
+                avg = sum(r["pps_max_deviation"] for r in rows) / len(rows)
+                y_maxdev.append(avg)
+            ax.plot(x_vals, y_maxdev, marker="o", markersize=3, label=tool)
+
+        ax.set_xlabel("Target QPS")
+        ax.set_ylabel(f"Max PPS Deviation from Expected ({interval} intervals)")
+        ax.set_title(f"PPS Accuracy: Maximum Deviation ({interval})")
+        ax.legend(loc="upper left", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+        path = os.path.join(output_dir, f"pps_maxdev_{interval}.png")
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+
 def plot_load_impact(results, output_dir):
     """Plot load generator impact analysis charts (Script 3).
 

@@ -59,7 +59,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
     session = run_dns_responder_session(config, timestamps=True)
 
     try:
-        tool_timeout = config["runtime"] + 60
+        tool_timeout = config["runtime"] + 120
         result = ssh_run(client, cmd, timeout=tool_timeout)
 
         tool_stdout = result.stdout
@@ -76,7 +76,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
 
         # Wait for dns_responder
         wait_dns_responder(
-            session["proc"], timeout=session["duration"] + 30
+            session["proc"], timeout=session["duration"] + 120
         )
 
         # Collect dns_responder output + timestamps
@@ -124,6 +124,10 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
                 "mean_qps": round(metrics.mean_qps, 2),
                 "stddev": round(metrics.stddev, 2),
                 "max_deviation": round(metrics.max_deviation, 2),
+                "expected_pps": round(metrics.expected_pps, 2),
+                "mean_pps": round(metrics.mean_pps, 2),
+                "pps_stddev": round(metrics.pps_stddev, 2),
+                "pps_max_deviation": round(metrics.pps_max_deviation, 2),
                 "responder_avg_rx_pps": resp_result.avg_rx_pps,
                 "responder_rx_total": resp_result.rx_total,
                 "responder_drops": resp_result.drops,
@@ -204,9 +208,10 @@ def main():
 
     # Generate charts
     try:
-        from benchmark.charts import plot_qps_accuracy
+        from benchmark.charts import plot_qps_accuracy, plot_pps_accuracy
         charts_dir = os.path.join(output_dir, script_name, "charts")
         plot_qps_accuracy(store.results, charts_dir)
+        plot_pps_accuracy(store.results, charts_dir)
         log.info("Charts saved to %s", charts_dir)
     except ImportError:
         log.warning("matplotlib not available, skipping chart generation")

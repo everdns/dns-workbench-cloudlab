@@ -42,7 +42,7 @@ script2:
   accuracy_min_qps: 100000
   accuracy_max_qps: 1000000
   accuracy_step: 50000
-  trials: 10
+  trials: 3
 
 script3:
   min_qps: 100000
