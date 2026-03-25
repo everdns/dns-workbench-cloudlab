@@ -145,8 +145,7 @@ def run_single_test(config, tool, qps, store, script_name):
             row["tool_queries_sent"] = tool_result.queries_sent
             row["tool_queries_completed"] = tool_result.queries_completed
             row["tool_queries_lost"] = tool_result.queries_lost
-            if tool.reports_latency and tool_result.avg_latency is not None:
-                row["avg_latency_s"] = tool_result.avg_latency
+            row["avg_latency_s"] = tool_result.avg_latency
         except Exception:
             if not tool_timed_out:
                 raise

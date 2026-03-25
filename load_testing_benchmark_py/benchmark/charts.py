@@ -35,7 +35,8 @@ def plot_max_throughput(results, output_dir):
     all_x = [row["requested_qps"] for row in results]
     if all_x:
         max_val = max(all_x)
-        ax.plot([0, max_val], [0, max_val], "--", color="gray", alpha=0.5, label="Ideal (y=x)")
+        min_val = min(all_x)
+        ax.plot([min_val, max_val], [min_val, max_val], "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
     ax.set_xlabel("Requested QPS")
     ax.set_ylabel("Achieved QPS (dns_responder)")
