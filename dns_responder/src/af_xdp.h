@@ -47,9 +47,11 @@ struct worker_ctx {
 	int                     cpu_id;
 	volatile int           *running;
 	int                     batch_size;
-	int                     record_timestamps;
+	int                     record_timestamps; /* 0=off, 1=all, 2=min/max */
 	struct timespec         start_time;
 	struct ts_buffer        ts;
+	uint64_t                ts_min_ns;  /* earliest RX timestamp (ns since start) */
+	uint64_t                ts_max_ns;  /* latest RX timestamp (ns since start) */
 } __attribute__((aligned(64)));
 
 /*

@@ -13,6 +13,7 @@
 #include <net/if.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,7 @@ struct config {
 	char xdp_prog_path[512];
 	char output_path[512];
 	char timestamps_path[512];
+	int  ts_range;            /* track min/max timestamps for QPS */
 };
 
 static void config_defaults(struct config *cfg)
@@ -74,6 +76,7 @@ static void usage(const char *prog)
 		"  -b, --batch-size N       RX/TX batch size (default: %d)\n"
 		"  -f, --frame-count N      UMEM frames per queue (default: %d)\n"
 		"  -t, --timestamps FILE    Write per-packet RX timestamps to file\n"
+	"  -T, --ts-range           Track min/max RX timestamps for actual QPS\n"
 		"  -x, --xdp-prog FILE      Path to XDP object file\n"
 		"  -v, --verbose            Print per-thread stats\n"
 		"  -h, --help               Show this help\n",
@@ -88,6 +91,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		{ "duration",    required_argument, NULL, 'd' },
 		{ "output",      required_argument, NULL, 'o' },
 		{ "timestamps",  required_argument, NULL, 't' },
+		{ "ts-range",    no_argument,       NULL, 'T' },
 		{ "zerocopy",    no_argument,       NULL, 'z' },
 		{ "no-zerocopy", no_argument,       NULL, 'Z' },
 		{ "batch-size",  required_argument, NULL, 'b' },
@@ -99,7 +103,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:zZb:f:x:vh",
+	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TzZb:f:x:vh",
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -118,6 +122,9 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		case 't':
 			snprintf(cfg->timestamps_path,
 				 sizeof(cfg->timestamps_path), "%s", optarg);
+			break;
+		case 'T':
+			cfg->ts_range = 1;
 			break;
 		case 'z':
 			cfg->zerocopy = 2; /* force */
@@ -350,7 +357,11 @@ int main(int argc, char **argv)
 	}
 
 	/* Initialize per-queue UMEM and AF_XDP sockets */
-	int record_ts = cfg.timestamps_path[0] != '\0';
+	int record_ts = 0;
+	if (cfg.timestamps_path[0] != '\0')
+		record_ts = 1;
+	else if (cfg.ts_range)
+		record_ts = 2;
 	for (int q = 0; q < cfg.num_queues; q++) {
 		struct worker_ctx *w = &workers[q];
 		w->running = (volatile int *)&running;
@@ -454,8 +465,16 @@ join:
 	/* Aggregate and print stats */
 	struct thread_stats *all_stats = malloc(cfg.num_queues * sizeof(struct thread_stats));
 	if (all_stats) {
-		for (int q = 0; q < cfg.num_queues; q++)
+		for (int q = 0; q < cfg.num_queues; q++) {
 			all_stats[q] = workers[q].stats;
+			if (record_ts == 2) {
+				all_stats[q].ts_min_ns = workers[q].ts_min_ns;
+				all_stats[q].ts_max_ns = workers[q].ts_max_ns;
+			} else if (record_ts == 1 && workers[q].ts.count > 0) {
+				all_stats[q].ts_min_ns = workers[q].ts.data[0];
+				all_stats[q].ts_max_ns = workers[q].ts.data[workers[q].ts.count - 1];
+			}
+		}
 
 		struct agg_stats agg;
 		stats_aggregate(all_stats, cfg.num_queues, &agg);

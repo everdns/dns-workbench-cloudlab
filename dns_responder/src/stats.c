@@ -1,11 +1,15 @@
 #include "stats.h"
 
+#include <stdint.h>
 #include <string.h>
 
 void stats_aggregate(const struct thread_stats *thread_stats,
 		     int num_threads, struct agg_stats *out)
 {
 	memset(out, 0, sizeof(*out));
+
+	uint64_t global_min = UINT64_MAX;
+	uint64_t global_max = 0;
 
 	for (int i = 0; i < num_threads; i++) {
 		const struct thread_stats *t = &thread_stats[i];
@@ -21,7 +25,15 @@ void stats_aggregate(const struct thread_stats *thread_stats,
 		out->type_mx      += t->type_mx;
 		out->type_https   += t->type_https;
 		out->type_other   += t->type_other;
+
+		if (t->ts_min_ns < global_min)
+			global_min = t->ts_min_ns;
+		if (t->ts_max_ns > global_max)
+			global_max = t->ts_max_ns;
 	}
+
+	if (global_min < global_max)
+		out->actual_duration_secs = (double)(global_max - global_min) / 1e9;
 }
 
 static void print_count(FILE *stream, const char *label, uint64_t count)
@@ -59,6 +71,20 @@ void stats_print(FILE *stream, const struct agg_stats *agg,
 		fprintf(stream, "  %-16s %.2f Gbps\n",
 			"TX bandwidth:",
 			(double)agg->tx_bytes * 8 / duration_secs / 1e9);
+	}
+
+	if (agg->actual_duration_secs > 0) {
+		fprintf(stream, "\nActual traffic window: %.3fs "
+			"(first pkt to last pkt)\n",
+			agg->actual_duration_secs);
+		fprintf(stream, "  %-16s %.0f qps (%.2f Mqps)\n",
+			"RX QPS:",
+			(double)agg->rx_packets / agg->actual_duration_secs,
+			(double)agg->rx_packets / agg->actual_duration_secs / 1e6);
+		fprintf(stream, "  %-16s %.0f qps (%.2f Mqps)\n",
+			"TX QPS:",
+			(double)agg->tx_packets / agg->actual_duration_secs,
+			(double)agg->tx_packets / agg->actual_duration_secs / 1e6);
 	}
 
 	fprintf(stream, "\nQuery types:\n");

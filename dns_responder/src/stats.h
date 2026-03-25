@@ -18,7 +18,9 @@ struct thread_stats {
 	uint64_t type_mx;
 	uint64_t type_https;
 	uint64_t type_other;
-	uint64_t _pad[4]; /* pad to 128 bytes (2 cache lines) */
+	uint64_t ts_min_ns; /* earliest RX timestamp (ns), UINT64_MAX if none */
+	uint64_t ts_max_ns; /* latest RX timestamp (ns), 0 if none */
+	uint64_t _pad[2]; /* pad to 128 bytes (2 cache lines) */
 } __attribute__((aligned(64)));
 
 /* Aggregated statistics */
@@ -35,6 +37,7 @@ struct agg_stats {
 	uint64_t type_mx;
 	uint64_t type_https;
 	uint64_t type_other;
+	double   actual_duration_secs; /* traffic window from timestamps (0 = N/A) */
 };
 
 /*

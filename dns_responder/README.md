@@ -90,6 +90,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-b, --batch-size N` | RX/TX batch size | 64 |
 | `-f, --frame-count N` | UMEM frames per queue | 4096 |
 | `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |
+| `-T, --ts-range` | Track min/max RX timestamps, report actual QPS | — |
 | `-x, --xdp-prog FILE` | Path to XDP object file | `./xdp/xdp_dns_redirect.o` |
 | `-v, --verbose` | Print per-thread breakdown | off |
 
@@ -103,6 +104,11 @@ sudo ./dns_responder -i eth1
 Fixed duration with stats output:
 ```sh
 sudo ./dns_responder -i eth1 -d 30 -o results.txt -v
+```
+
+Track actual QPS based on first-to-last packet timing:
+```sh
+sudo ./dns_responder -i eth1 -d 30 -T
 ```
 
 Specify queue count (match NIC RSS config):
@@ -167,6 +173,20 @@ grep -v '^#' timestamps.txt | awk 'NR>1{print $1-prev}{prev=$1}'
 # Packets per 1ms bin
 grep -v '^#' timestamps.txt | awk '{print int($1/1000000)}' | uniq -c
 ```
+
+## Timestamp Range Mode (`-T`)
+
+The `-T` / `--ts-range` flag enables lightweight min/max timestamp tracking with no per-packet buffer allocation. Each worker thread records only the earliest and latest `CLOCK_MONOTONIC` RX timestamps. After the run, the global min and max are computed across all workers to determine the actual traffic window — the time between the first and last packet received.
+
+This is used to calculate QPS based on when traffic was actually flowing, excluding idle startup/shutdown time that inflates the wall-clock duration:
+
+```
+Actual traffic window: 29.847s (first pkt to last pkt)
+  RX QPS:          1503842 qps (1.50 Mqps)
+  TX QPS:          1503791 qps (1.50 Mqps)
+```
+
+Unlike `-t` (which writes every per-packet timestamp to a file), `-T` has negligible overhead — just one `clock_gettime` call and two comparisons per packet, with no memory allocation.
 
 ## Benchmark Methodology
 
