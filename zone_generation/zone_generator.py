@@ -163,7 +163,7 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
             dnsperf_file.write(get_dnsperf_entry(fqdn, record_type))
 
             # Write to dnspyre file
-            dnspyre_file.write(get_dnspyre_entry(fqdn, record_type))
+            dnspyre_file.write(get_dnspyre_entry(fqdn))
 
             # Move to next zone file if current one is full
             if file_record_count >= max_records_per_file and file_idx < num_files - 1:
