@@ -79,6 +79,7 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
     single_file = num_files == 1
 
     dnsperf_file = open(os.path.join(out_dir, f"dnsperf_input_{base_subnet_file_str}_{num_records}"), 'w')
+    dnspyre_file = open(os.path.join(out_dir, f"dnspyre_input_{base_subnet_file_str}_{num_records}"), 'w')
 
     try:
         file_idx = 0
@@ -161,6 +162,9 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
             # Write to dnsperf file
             dnsperf_file.write(get_dnsperf_entry(fqdn, record_type))
 
+            # Write to dnspyre file
+            dnspyre_file.write(get_dnspyre_entry(fqdn, record_type))
+
             # Move to next zone file if current one is full
             if file_record_count >= max_records_per_file and file_idx < num_files - 1:
                 file_idx += 1
@@ -170,6 +174,7 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
         if zone_file:
             zone_file.close()
         dnsperf_file.close()
+        dnspyre_file.close()
 
     # For multi-file: write main zone file with header + $INCLUDE directives
     if not single_file:
@@ -182,6 +187,9 @@ def generate_fqdns_and_ips(num_ips: int, num_records: int, sld: str, base_subnet
 
 def get_dnsperf_entry(fqdn, record_type='A'):
     return f"{fqdn}.  {record_type}\n"
+
+def get_dnspyre_entry(fqdn):
+    return f"{fqdn}."
 
 def get_zone_file_entry(fqdn, data, record_type='A'):
     if record_type == 'A':
