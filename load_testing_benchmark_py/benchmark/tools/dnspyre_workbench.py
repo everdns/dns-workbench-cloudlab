@@ -25,6 +25,8 @@ class DnspyreWorkbench(Tool):
         )
 
     def parse_output(self, stdout):
+        # Strip ANSI color/escape codes so regexes can match cleanly
+        stdout = re.sub(r"\x1b\[[0-9;]*m", "", stdout)
         result = ToolResult(raw_output=stdout)
 
         def find_int(pattern):
