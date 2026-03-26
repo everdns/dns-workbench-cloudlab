@@ -56,7 +56,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         return []
 
     # Start dns_responder with timestamps
-    session = run_dns_responder_session(config, timestamps=True)
+    session = run_dns_responder_session(config, timestamps=True, timestamps_file=True)
 
     try:
         tool_timeout = config["runtime"] + 120
