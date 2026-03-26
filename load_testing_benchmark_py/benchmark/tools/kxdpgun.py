@@ -41,7 +41,7 @@ class Kxdpgun(Tool):
             result.run_time = float(m.group(1))
 
         if result.run_time > 0:
-            result.achieved_qps = result.queries_sent / result.run_time
+            result.achieved_qps = result.queries_completed / result.run_time
 
         # Parse response codes
         for m_code in re.finditer(r"responded\s+(\w+):\s+(\d+)", stdout):
