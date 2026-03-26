@@ -143,6 +143,11 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    log.info("=== plot_qps_accuracy ===")
+    log.info("  Source: %s", args.csv if args.csv else args.raw_dir)
+    log.info("  Output dir: %s", args.output_dir)
+    log.info("  Crop: %.2fs", args.crop)
+
     if args.csv:
         results = load_from_csv(args.csv)
         log.info("Loaded %d rows from %s", len(results), args.csv)
