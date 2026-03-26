@@ -130,6 +130,7 @@ def load_from_raw_dir(raw_dir, crop_s, processes=None):
     # Default to all CPUs
     processes = processes or cpu_count()
 
+    log.info("Processing %d timestamp files with %d processes...", len(ts_files), processes)
     with Pool(processes) as pool:
         all_results = pool.map(_process_ts_file, [(f, crop_s) for f in ts_files])
 
