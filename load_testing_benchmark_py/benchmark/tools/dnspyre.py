@@ -46,7 +46,8 @@ class Dnspyre(Tool):
             m = re.search(pattern, stdout)
             return float(m.group(1)) if m else 0.0
 
-        result.queries_sent = find_int(r"Total requests:\s+(\d+)")
+        read_write_errors = find_int(r"Read/Write errors:\s+(\d+)")
+        result.queries_sent = find_int(r"Total requests:\s+(\d+)") - read_write_errors
         result.queries_completed = find_int(r"DNS success responses:\s+(\d+)")
         result.queries_lost = result.queries_sent - result.queries_completed
         result.achieved_qps = find_float(r"Questions per second:\s+([\d.]+)")
