@@ -23,6 +23,8 @@ struct dns_hdr {
 
 /* DNS response flags: QR=1, AA=1, RCODE=0 */
 #define DNS_FLAGS_RESPONSE  0x8400
+/* DNS response flags: QR=1, AA=1, RCODE=3 (NXDOMAIN) */
+#define DNS_FLAGS_NXDOMAIN  0x8403
 /* DNS response flags: QR=1, AA=1, RCODE=4 (NOTIMP) */
 #define DNS_FLAGS_NOTIMP    0x8404
 
@@ -60,5 +62,12 @@ void dns_templates_init(void);
  * qtype_out: if non-NULL, set to the query type for stats
  */
 uint32_t process_dns_packet(uint8_t *pkt, uint32_t len, uint16_t *qtype_out);
+
+/*
+ * Ultra-fast NXDOMAIN responder: swap headers, set RCODE=3, return same length.
+ * Skips all QNAME scanning and answer building for maximum throughput.
+ * Returns packet length on success, 0 on error.
+ */
+uint32_t process_nxdomain_packet(uint8_t *pkt, uint32_t len);
 
 #endif /* DNS_H */

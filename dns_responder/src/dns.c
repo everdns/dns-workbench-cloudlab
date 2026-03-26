@@ -137,6 +137,39 @@ static uint16_t scan_qname(const uint8_t *qname, const uint8_t *pkt_end)
 	return 0; /* ran off end of packet */
 }
 
+uint32_t process_nxdomain_packet(uint8_t *pkt, uint32_t len)
+{
+	const uint32_t min_hdr = sizeof(struct eth_hdr) + sizeof(struct ipv4_hdr)
+				 + sizeof(struct udp_hdr) + sizeof(struct dns_hdr);
+
+	if (__builtin_expect(len < min_hdr, 0))
+		return 0;
+
+	struct eth_hdr *eth = (struct eth_hdr *)pkt;
+	struct ipv4_hdr *ip = (struct ipv4_hdr *)(pkt + sizeof(struct eth_hdr));
+	struct udp_hdr *udp = (struct udp_hdr *)(pkt + sizeof(struct eth_hdr)
+				+ ((ip->ihl_ver & 0x0F) * 4));
+	struct dns_hdr *dns = (struct dns_hdr *)((uint8_t *)udp + sizeof(struct udp_hdr));
+
+	/* Swap L2/L3/L4 headers */
+	eth_swap(eth);
+	ipv4_swap(ip);
+	udp_swap(udp);
+
+	/* Set NXDOMAIN response: keep ID and question, no answer sections */
+	dns->flags = htons(DNS_FLAGS_NXDOMAIN);
+	dns->qdcount = htons(1);
+	dns->ancount = 0;
+	dns->nscount = 0;
+	dns->arcount = 0;
+
+	/* Recompute IP checksum (src/dst swapped) */
+	ip_checksum_recompute(ip);
+	udp->check = 0;
+
+	return len;
+}
+
 uint32_t process_dns_packet(uint8_t *pkt, uint32_t len, uint16_t *qtype_out)
 {
 	const uint32_t min_hdr = sizeof(struct eth_hdr) + sizeof(struct ipv4_hdr)

@@ -42,6 +42,7 @@ struct config {
 	char output_path[512];
 	char timestamps_path[512];
 	int  ts_range;            /* track min/max timestamps for QPS */
+	int  nxdomain;            /* always return NXDOMAIN (fast path) */
 };
 
 static void config_defaults(struct config *cfg)
@@ -77,6 +78,7 @@ static void usage(const char *prog)
 		"  -f, --frame-count N      UMEM frames per queue (default: %d)\n"
 		"  -t, --timestamps FILE    Write per-packet RX timestamps to file\n"
 	"  -T, --ts-range           Track min/max RX timestamps for actual QPS\n"
+		"  -N, --nxdomain           Always return NXDOMAIN (fast path, minimal stats)\n"
 		"  -x, --xdp-prog FILE      Path to XDP object file\n"
 		"  -v, --verbose            Print per-thread stats\n"
 		"  -h, --help               Show this help\n",
@@ -92,6 +94,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		{ "output",      required_argument, NULL, 'o' },
 		{ "timestamps",  required_argument, NULL, 't' },
 		{ "ts-range",    no_argument,       NULL, 'T' },
+		{ "nxdomain",    no_argument,       NULL, 'N' },
 		{ "zerocopy",    no_argument,       NULL, 'z' },
 		{ "no-zerocopy", no_argument,       NULL, 'Z' },
 		{ "batch-size",  required_argument, NULL, 'b' },
@@ -103,7 +106,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TzZb:f:x:vh",
+	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TNzZb:f:x:vh",
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -125,6 +128,9 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 			break;
 		case 'T':
 			cfg->ts_range = 1;
+			break;
+		case 'N':
+			cfg->nxdomain = 1;
 			break;
 		case 'z':
 			cfg->zerocopy = 2; /* force */
@@ -306,14 +312,17 @@ int main(int argc, char **argv)
 	fprintf(stderr, "  Zero-copy:  %s\n",
 		cfg.zerocopy == 2 ? "forced" :
 		cfg.zerocopy == 1 ? "preferred" : "disabled");
+	if (cfg.nxdomain)
+		fprintf(stderr, "  Mode:       NXDOMAIN (fast path)\n");
 	if (cfg.duration > 0)
 		fprintf(stderr, "  Duration:   %d seconds\n", cfg.duration);
 	else
 		fprintf(stderr, "  Duration:   until SIGINT/SIGTERM\n");
 	fprintf(stderr, "\n");
 
-	/* Initialize DNS response templates */
-	dns_templates_init();
+	/* Initialize DNS response templates (not needed for NXDOMAIN mode) */
+	if (!cfg.nxdomain)
+		dns_templates_init();
 
 	/* Set up signal handlers */
 	struct sigaction sa;
@@ -415,8 +424,10 @@ int main(int argc, char **argv)
 		workers[q].start_time = start_time;
 
 	/* Launch worker threads */
+	void *(*thread_fn)(void *) = cfg.nxdomain ? worker_thread_nxdomain
+						   : worker_thread;
 	for (int q = 0; q < cfg.num_queues; q++) {
-		if (pthread_create(&threads[q], NULL, worker_thread,
+		if (pthread_create(&threads[q], NULL, thread_fn,
 				   &workers[q]) != 0) {
 			fprintf(stderr, "ERROR: pthread_create queue %d: %s\n",
 				q, strerror(errno));
@@ -476,22 +487,38 @@ join:
 			}
 		}
 
-		struct agg_stats agg;
-		stats_aggregate(all_stats, cfg.num_queues, &agg);
+		if (cfg.nxdomain) {
+			stats_print_nxdomain(stderr, all_stats,
+					     cfg.num_queues, duration);
+		} else {
+			struct agg_stats agg;
+			stats_aggregate(all_stats, cfg.num_queues, &agg);
 
-		stats_print(stderr, &agg, duration);
+			stats_print(stderr, &agg, duration);
 
-		if (cfg.verbose)
-			stats_print_per_thread(stderr, all_stats, cfg.num_queues);
+			if (cfg.verbose)
+				stats_print_per_thread(stderr, all_stats,
+						       cfg.num_queues);
+		}
 
 		/* Write to output file if specified */
 		if (cfg.output_path[0] != '\0') {
 			FILE *f = fopen(cfg.output_path, "w");
 			if (f) {
-				stats_print(f, &agg, duration);
-				if (cfg.verbose)
-					stats_print_per_thread(f, all_stats,
-							       cfg.num_queues);
+				if (cfg.nxdomain) {
+					stats_print_nxdomain(f, all_stats,
+							     cfg.num_queues,
+							     duration);
+				} else {
+					struct agg_stats agg;
+					stats_aggregate(all_stats,
+							cfg.num_queues, &agg);
+					stats_print(f, &agg, duration);
+					if (cfg.verbose)
+						stats_print_per_thread(
+							f, all_stats,
+							cfg.num_queues);
+				}
 				fclose(f);
 				fprintf(stderr, "Stats written to %s\n",
 					cfg.output_path);

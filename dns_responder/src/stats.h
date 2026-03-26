@@ -58,6 +58,12 @@ void stats_print(FILE *stream, const struct agg_stats *agg,
 		 double duration_secs);
 
 /*
+ * Print NXDOMAIN mode summary: total packets and pps only.
+ */
+void stats_print_nxdomain(FILE *stream, const struct thread_stats *stats,
+			  int num_threads, double duration_secs);
+
+/*
  * Print per-thread breakdown to the given stream.
  */
 void stats_print_per_thread(FILE *stream, const struct thread_stats *stats,

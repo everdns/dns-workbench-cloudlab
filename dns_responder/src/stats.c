@@ -98,6 +98,32 @@ void stats_print(FILE *stream, const struct agg_stats *agg,
 	fprintf(stream, "\n");
 }
 
+void stats_print_nxdomain(FILE *stream, const struct thread_stats *stats,
+			  int num_threads, double duration_secs)
+{
+	uint64_t total = 0;
+	for (int i = 0; i < num_threads; i++)
+		total += stats[i].rx_packets;
+
+	fprintf(stream, "\n--- NXDOMAIN mode complete (%.1fs) ---\n",
+		duration_secs);
+	print_count(stream, "Total packets:", total);
+
+	if (duration_secs > 0) {
+		fprintf(stream, "  %-16s %.0f pps (%.2f Mpps)\n",
+			"Avg throughput:",
+			(double)total / duration_secs,
+			(double)total / duration_secs / 1e6);
+	}
+
+	fprintf(stream, "\nPer-thread:\n");
+	for (int i = 0; i < num_threads; i++)
+		fprintf(stream, "  Thread %-4d %'lu\n", i,
+			stats[i].rx_packets);
+
+	fprintf(stream, "\n");
+}
+
 void stats_print_per_thread(FILE *stream, const struct thread_stats *stats,
 			    int num_threads)
 {

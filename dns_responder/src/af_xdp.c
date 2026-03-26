@@ -348,6 +348,91 @@ void *worker_thread(void *arg)
 	return NULL;
 }
 
+void *worker_thread_nxdomain(void *arg)
+{
+	struct worker_ctx *ctx = (struct worker_ctx *)arg;
+	struct xsk_info *xsk = &ctx->xsk;
+	int batch_size = ctx->batch_size;
+
+	while (__builtin_expect(*ctx->running, 1)) {
+		uint32_t rx_idx = 0;
+
+		reclaim_completion(xsk);
+		refill_fill_ring(xsk);
+
+		uint32_t rx_count = xsk_ring_cons__peek(&xsk->rx, batch_size,
+							&rx_idx);
+		if (rx_count == 0) {
+			struct pollfd fds = {
+				.fd = xsk_socket__fd(xsk->xsk),
+				.events = POLLIN,
+			};
+			poll(&fds, 1, 10);
+			continue;
+		}
+
+		uint64_t tx_addrs[DEFAULT_BATCH_SIZE];
+		uint32_t tx_lens[DEFAULT_BATCH_SIZE];
+		uint32_t tx_count = 0;
+
+		for (uint32_t i = 0; i < rx_count; i++) {
+			const struct xdp_desc *rx_desc;
+			rx_desc = xsk_ring_cons__rx_desc(&xsk->rx, rx_idx + i);
+
+			uint64_t addr = rx_desc->addr;
+			uint32_t pkt_len = rx_desc->len;
+			uint8_t *pkt = xsk_umem__get_data(xsk->umem_area, addr);
+
+			if (i + 1 < rx_count) {
+				const struct xdp_desc *next;
+				next = xsk_ring_cons__rx_desc(&xsk->rx,
+							     rx_idx + i + 1);
+				__builtin_prefetch(
+					xsk_umem__get_data(xsk->umem_area,
+							   next->addr),
+					1, 3);
+			}
+
+			uint32_t new_len = process_nxdomain_packet(pkt, pkt_len);
+
+			if (__builtin_expect(new_len == 0, 0)) {
+				free_frame(xsk, addr);
+				continue;
+			}
+
+			ctx->stats.rx_packets++;
+
+			tx_addrs[tx_count] = addr;
+			tx_lens[tx_count] = new_len;
+			tx_count++;
+		}
+
+		xsk_ring_cons__release(&xsk->rx, rx_count);
+
+		if (tx_count > 0) {
+			uint32_t tx_idx_reserved = 0;
+			while (xsk_ring_prod__reserve(&xsk->tx, tx_count,
+						      &tx_idx_reserved) < tx_count) {
+				kick_tx(xsk);
+				reclaim_completion(xsk);
+			}
+
+			for (uint32_t i = 0; i < tx_count; i++) {
+				struct xdp_desc *tx_desc;
+				tx_desc = xsk_ring_prod__tx_desc(&xsk->tx,
+								 tx_idx_reserved + i);
+				tx_desc->addr = tx_addrs[i];
+				tx_desc->len = tx_lens[i];
+			}
+
+			xsk_ring_prod__submit(&xsk->tx, tx_count);
+			kick_tx(xsk);
+		}
+	}
+
+	return NULL;
+}
+
 void xsk_cleanup(struct xsk_info *xsk)
 {
 	if (xsk->xsk)

@@ -83,6 +83,13 @@ void xsk_populate_fill_ring(struct xsk_info *xsk);
 void *worker_thread(void *arg);
 
 /*
+ * NXDOMAIN worker thread entry point.
+ * Stripped-down loop that only swaps headers and returns NXDOMAIN.
+ * Only tracks rx_packets for stats.
+ */
+void *worker_thread_nxdomain(void *arg);
+
+/*
  * Cleanup AF_XDP socket and UMEM resources.
  */
 void xsk_cleanup(struct xsk_info *xsk);
