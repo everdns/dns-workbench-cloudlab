@@ -420,6 +420,7 @@ def plot_load_impact(results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     dns_services = sorted(set(row["dns_service"] for row in results))
+    all_tools = sorted(set(row["tool"] for row in results))
 
     for dns_service in dns_services:
         service_results = [r for r in results if r["dns_service"] == dns_service]
@@ -432,13 +433,15 @@ def plot_load_impact(results, output_dir):
         # --- Answer Rate vs QPS ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_vals = []
+            y_mean, y_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg = sum(r["answer_rate_pct"] for r in rows) / len(rows)
-                y_vals.append(avg)
-            ax.plot(x_vals, y_vals, marker="o", markersize=3, label=tool)
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "answer_rate_pct")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, label="99.99% threshold")
         ax.set_xlabel("Target QPS")
@@ -462,15 +465,24 @@ def plot_load_impact(results, output_dir):
         if latency_tools:
             fig, ax = plt.subplots(figsize=(12, 7))
             for tool in sorted(latency_tools):
+                style = _tool_style(tool, all_tools)
                 x_vals = sorted(by_tool_qps[tool].keys())
-                y_vals = []
+                y_mean, y_err = [], []
                 for qps in x_vals:
                     rows = by_tool_qps[tool][qps]
-                    lats = [r["avg_latency_s"] for r in rows
+                    lats = [r["avg_latency_s"] * 1000 for r in rows
                             if r.get("avg_latency_s") is not None]
-                    avg = sum(lats) / len(lats) if lats else 0
-                    y_vals.append(avg * 1000)  # Convert to ms
-                ax.plot(x_vals, y_vals, marker="o", markersize=3, label=tool)
+                    n = len(lats)
+                    mean = sum(lats) / n if n else 0
+                    if n > 1:
+                        variance = sum((v - mean) ** 2 for v in lats) / (n - 1)
+                        std = math.sqrt(variance)
+                    else:
+                        std = 0.0
+                    y_mean.append(mean)
+                    y_err.append(std)
+                ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                            capsize=3, linewidth=1.5, label=tool, **style)
 
             ax.set_xlabel("Target QPS")
             ax.set_ylabel("Average Latency (ms)")
@@ -486,17 +498,21 @@ def plot_load_impact(results, output_dir):
         fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
         for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            sent = []
-            completed = []
+            sent_mean, sent_err = [], []
+            comp_mean, comp_err = [], []
             for qps in x_vals:
-                rows = by_tool_qps[tool][qps]
-                avg_sent = sum(r["queries_sent"] for r in rows) / len(rows)
-                avg_comp = sum(r["queries_completed"] for r in rows) / len(rows)
-                sent.append(avg_sent)
-                completed.append(avg_comp)
-            axes[0].plot(x_vals, sent, marker="o", markersize=3, label=tool)
-            axes[1].plot(x_vals, completed, marker="o", markersize=3, label=tool)
+                mean_s, std_s = _trial_mean_std(by_tool_qps[tool][qps], "queries_sent")
+                mean_c, std_c = _trial_mean_std(by_tool_qps[tool][qps], "queries_completed")
+                sent_mean.append(mean_s)
+                sent_err.append(std_s)
+                comp_mean.append(mean_c)
+                comp_err.append(std_c)
+            axes[0].errorbar(x_vals, sent_mean, yerr=sent_err, markersize=4,
+                             capsize=3, linewidth=1.5, label=tool, **style)
+            axes[1].errorbar(x_vals, comp_mean, yerr=comp_err, markersize=4,
+                             capsize=3, linewidth=1.5, label=tool, **style)
 
         axes[0].set_xlabel("Target QPS")
         axes[0].set_ylabel("Queries Sent")
