@@ -189,7 +189,7 @@ def get_dnsperf_entry(fqdn, record_type='A'):
     return f"{fqdn}.  {record_type}\n"
 
 def get_dnspyre_entry(fqdn):
-    return f"{fqdn}."
+    return f"{fqdn}.\n"
 
 def get_zone_file_entry(fqdn, data, record_type='A'):
     if record_type == 'A':
