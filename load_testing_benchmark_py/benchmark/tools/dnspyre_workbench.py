@@ -21,7 +21,7 @@ class DnspyreWorkbench(Tool):
             f"dnspyre-dnsworkbench --server {server}"
             f" --duration {runtime}s -c {threads}"
             f" --rate-limit {qps} --request={timeout}s"
-            f" @{input_file}"
+            f" --query-file {input_file}"
         )
 
     def parse_output(self, stdout):
