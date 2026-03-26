@@ -74,19 +74,31 @@ def parse_dns_responder_output(text):
     return result
 
 
-def compute_accuracy_metrics(timestamps_ns, target_qps, runtime_s):
+def compute_accuracy_metrics(timestamps_ns, target_qps, runtime_s, crop_s=0):
     """Compute QPS accuracy metrics from dns_responder timestamps.
 
     Args:
         timestamps_ns: list of nanosecond timestamps (ints)
         target_qps: target queries per second
         runtime_s: test runtime in seconds
+        crop_s: seconds to trim from both the start and end of the timestamp
+                 range before computing metrics (default: 0, no cropping)
 
     Returns:
         dict mapping interval label to AccuracyMetrics
     """
     if not timestamps_ns:
         return {}
+
+    if crop_s > 0:
+        crop_ns = int(crop_s * 1_000_000_000)
+        t_min = timestamps_ns[0] + crop_ns
+        t_max = timestamps_ns[-1] - crop_ns
+        if t_min >= t_max:
+            return {}
+        timestamps_ns = [ts for ts in timestamps_ns if t_min <= ts <= t_max]
+        if not timestamps_ns:
+            return {}
 
     intervals = {
         1000: ("1s", 1_000_000_000),

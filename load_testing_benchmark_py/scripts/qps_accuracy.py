@@ -38,7 +38,7 @@ from benchmark.tools import get_tools
 log = logging.getLogger(__name__)
 
 
-def run_accuracy_test(config, tool, qps, trial, store, script_name):
+def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
     """Run a single accuracy test: tool at target QPS with timestamp capture.
 
     Returns list of result rows (one per interval) or empty list on failure.
@@ -111,7 +111,7 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name):
         timestamps = read_timestamps_file(ts_dest)
         actual_runtime_ns = compute_actual_runtime(timestamps)
         log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
-        accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"])
+        accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"], crop_s=crop_s)
 
         rows = []
         for label, metrics in accuracy.items():
@@ -172,6 +172,7 @@ def main():
     max_qps = s2["accuracy_max_qps"]
     step = s2["accuracy_step"]
     trials = s2["trials"]
+    crop_s = s2.get("crop_s", 0)
 
     tools = get_tools(config.get("tools"))
     output_dir = args.output_dir
@@ -190,7 +191,7 @@ def main():
         for trial in range(trials):
             for tool in tools:
                 try:
-                    run_accuracy_test(config, tool, qps, trial, store, script_name)
+                    run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=crop_s)
                 except Exception as e:
                     log.error("Unhandled error: %s at %d QPS trial %d: %s",
                               tool.name, qps, trial + 1, e)

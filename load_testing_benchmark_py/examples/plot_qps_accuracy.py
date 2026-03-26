@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Generate qps_accuracy charts from a CSV file or raw output directory.
+
+Usage:
+    # From CSV:
+    python examples/plot_qps_accuracy.py --csv /path/to/results.csv
+
+    # From raw data directory:
+    python examples/plot_qps_accuracy.py --raw-dir /path/to/qps_accuracy/
+
+    # Custom output directory:
+    python examples/plot_qps_accuracy.py --csv results.csv --output-dir my_charts/
+
+The raw data directory should contain a timestamps/ subdirectory with files like:
+    dnsperf_10000qps_trial0_timestamps.txt
+"""
+import argparse
+import csv
+import glob
+import logging
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from benchmark.charts import plot_pps_accuracy, plot_qps_accuracy
+from benchmark.results import compute_accuracy_metrics, compute_actual_runtime, read_timestamps_file
+
+log = logging.getLogger(__name__)
+
+# Matches: tool_12345qps_trial0_timestamps.txt
+TS_FILE_RE = re.compile(r"^(.+)_(\d+)qps_trial(\d+)_timestamps\.txt$")
+
+
+def load_from_csv(csv_path):
+    """Load results from a CSV file."""
+    results = []
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            # Convert numeric fields
+            for key in ("target_qps", "trial"):
+                if key in row:
+                    row[key] = int(row[key])
+            for key in ("mean_qps", "stddev", "max_deviation",
+                        "expected_pps", "mean_pps", "pps_stddev",
+                        "pps_max_deviation", "actual_runtime_ns",
+                        "responder_avg_rx_pps", "responder_rx_total",
+                        "responder_drops"):
+                if key in row and row[key]:
+                    row[key] = float(row[key])
+            results.append(row)
+    return results
+
+
+def load_from_raw_dir(raw_dir, crop_s=0):
+    """Re-compute accuracy metrics from timestamp files in a directory.
+
+    Expects raw_dir to contain a timestamps/ subdirectory, or to be the
+    timestamps directory itself.
+    """
+    ts_dir = os.path.join(raw_dir, "timestamps")
+    if not os.path.isdir(ts_dir):
+        # Maybe the user pointed directly at the timestamps dir
+        if os.path.isdir(raw_dir) and glob.glob(os.path.join(raw_dir, "*_timestamps.txt")):
+            ts_dir = raw_dir
+        else:
+            log.error("No timestamps/ subdirectory found in %s", raw_dir)
+            sys.exit(1)
+
+    ts_files = glob.glob(os.path.join(ts_dir, "*_timestamps.txt"))
+    if not ts_files:
+        log.error("No timestamp files found in %s", ts_dir)
+        sys.exit(1)
+
+    # We need to infer the runtime from the timestamps themselves.
+    # Group files by (tool, qps) to detect the runtime.
+    results = []
+
+    for ts_file in sorted(ts_files):
+        filename = os.path.basename(ts_file)
+        m = TS_FILE_RE.match(filename)
+        if not m:
+            log.warning("Skipping unrecognized file: %s", filename)
+            continue
+
+        tool_name = m.group(1)
+        target_qps = int(m.group(2))
+        trial = int(m.group(3))
+
+        timestamps = read_timestamps_file(ts_file)
+        if len(timestamps) < 3:
+            log.warning("Too few timestamps in %s, skipping", filename)
+            continue
+
+        actual_runtime_ns = compute_actual_runtime(timestamps)
+        runtime_s = actual_runtime_ns / 1e9
+
+        accuracy = compute_accuracy_metrics(timestamps, target_qps, runtime_s, crop_s=crop_s)
+
+        for label, metrics in accuracy.items():
+            row = {
+                "tool": tool_name,
+                "target_qps": target_qps,
+                "trial": trial + 1,
+                "interval": label,
+                "actual_runtime_ns": actual_runtime_ns,
+                "mean_qps": round(metrics.mean_qps, 2),
+                "stddev": round(metrics.stddev, 2),
+                "max_deviation": round(metrics.max_deviation, 2),
+                "expected_pps": round(metrics.expected_pps, 2),
+                "mean_pps": round(metrics.mean_pps, 2),
+                "pps_stddev": round(metrics.pps_stddev, 2),
+                "pps_max_deviation": round(metrics.pps_max_deviation, 2),
+                "responder_avg_rx_pps": 0,
+                "responder_rx_total": len(timestamps),
+                "responder_drops": 0,
+            }
+            results.append(row)
+
+        log.info("Parsed %s at %d QPS trial %d: %d timestamps, %.1fs runtime",
+                 tool_name, target_qps, trial, len(timestamps), runtime_s)
+
+    return results
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate QPS/PPS accuracy charts from CSV or raw data"
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--csv", help="Path to results CSV file")
+    source.add_argument("--raw-dir", help="Path to directory with timestamps/ subdirectory")
+    parser.add_argument("--output-dir", default="charts",
+                        help="Directory to save charts (default: charts/)")
+    parser.add_argument("--crop", type=float, default=0,
+                        help="Seconds to trim from start and end of timestamps before computing metrics (default: 0)")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    if args.csv:
+        results = load_from_csv(args.csv)
+        log.info("Loaded %d rows from %s", len(results), args.csv)
+    else:
+        results = load_from_raw_dir(args.raw_dir, crop_s=args.crop)
+        log.info("Computed %d result rows from raw timestamps", len(results))
+
+    if not results:
+        log.error("No results to plot")
+        sys.exit(1)
+
+    tools_found = sorted(set(r["tool"] for r in results))
+    intervals_found = sorted(set(r["interval"] for r in results if r["interval"] != "N/A"))
+    log.info("Tools: %s, Intervals: %s", tools_found, intervals_found)
+
+    plot_qps_accuracy(results, args.output_dir)
+    plot_pps_accuracy(results, args.output_dir)
+    log.info("Charts saved to %s", args.output_dir)
+
+
+if __name__ == "__main__":
+    main()

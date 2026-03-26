@@ -84,6 +84,7 @@ def add_script2_args(parser):
     parser.add_argument("--accuracy-max-qps", type=int, help="Maximum QPS for accuracy test")
     parser.add_argument("--accuracy-step", type=int, help="QPS step for accuracy test")
     parser.add_argument("--trials", type=int, help="Number of trials per QPS per tool")
+    parser.add_argument("--crop", type=float, help="Seconds to trim from start and end of timestamps before computing metrics")
 
 
 def add_script3_args(parser):
@@ -118,6 +119,8 @@ def apply_script2_overrides(config, args):
         s2["accuracy_step"] = args.accuracy_step
     if args.trials is not None:
         s2["trials"] = args.trials
+    if getattr(args, "crop", None) is not None:
+        s2["crop_s"] = args.crop
     return config
 
 
