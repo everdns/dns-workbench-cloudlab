@@ -47,7 +47,7 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name):
         return None
 
     try:
-        tool_timeout = config["runtime"] + 60
+        tool_timeout = config["runtime"] + 120
         result = ssh_run(client, cmd, timeout=tool_timeout)
 
         tool_stdout = result.stdout
