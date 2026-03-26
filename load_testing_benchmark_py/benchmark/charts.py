@@ -304,9 +304,9 @@ def plot_pps_accuracy(results, output_dir):
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
                     "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
-        ax.set_xlabel(f"Expected PPS ({interval} intervals)")
-        ax.set_ylabel(f"Mean PPS ({interval} intervals)")
-        ax.set_title(f"PPS Accuracy: Mean Achieved vs Expected ({interval})")
+        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
+        ax.set_ylabel(f"Mean Packet Count ({interval} intervals)")
+        ax.set_title(f"Packet Count Accuracy: Mean Achieved vs Expected ({interval})")
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
@@ -327,9 +327,9 @@ def plot_pps_accuracy(results, output_dir):
             ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel(f"Expected PPS ({interval} intervals)")
-        ax.set_ylabel(f"PPS Standard Deviation ({interval} intervals)")
-        ax.set_title(f"PPS Accuracy: Standard Deviation ({interval})")
+        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
+        ax.set_ylabel(f"Packet Count Standard Deviation ({interval} intervals)")
+        ax.set_title(f"Packet Count Accuracy: Standard Deviation ({interval})")
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
@@ -350,9 +350,9 @@ def plot_pps_accuracy(results, output_dir):
             ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel(f"Expected PPS ({interval} intervals)")
-        ax.set_ylabel(f"Max PPS Deviation from Expected ({interval} intervals)")
-        ax.set_title(f"PPS Accuracy: Maximum Deviation ({interval})")
+        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
+        ax.set_ylabel(f"Max Packet Count Deviation from Expected ({interval} intervals)")
+        ax.set_title(f"Packet Count Accuracy: Maximum Deviation ({interval})")
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
@@ -364,9 +364,9 @@ def plot_pps_accuracy(results, output_dir):
     sorted_intervals = sorted(intervals, key=_interval_sort_key)
     if sorted_intervals:
         metrics_config = [
-            ("mean_pps", "Mean PPS", True),
-            ("pps_stddev", "PPS Standard Deviation", False),
-            ("pps_max_deviation", "Max PPS Deviation from Expected", False),
+            ("mean_pps", "Mean Packet Count", True),
+            ("pps_stddev", "Packet Count Standard Deviation", False),
+            ("pps_max_deviation", "Max Packet Count Deviation from Expected", False),
         ]
         fig, axes = plt.subplots(3, len(sorted_intervals),
                                  figsize=(6 * len(sorted_intervals), 15),
@@ -396,7 +396,7 @@ def plot_pps_accuracy(results, output_dir):
                     ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
                             "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
-                ax.set_xlabel(f"Expected PPS ({interval})")
+                ax.set_xlabel(f"Expected Packet Count ({interval})")
                 ax.set_ylabel(f"{ylabel} ({interval})")
                 ax.set_title(f"{ylabel} ({interval})")
                 ax.legend(loc="best", fontsize=6)
