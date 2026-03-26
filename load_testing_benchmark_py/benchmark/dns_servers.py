@@ -59,7 +59,7 @@ def wait_for_dns_ready(config, timeout=30):
     while time.time() < deadline:
         result = ssh_run(
             client,
-            f"dig @{server} example.com A +time=2 +tries=1 +short",
+            f"dig @{server}",
             timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
