@@ -95,34 +95,20 @@ def main():
         with open(resp_file) as f:
             resp_text = f.read()
         resp_result = parse_dns_responder_output(resp_text)
-
-        # Read timestamps and compute actual runtime
-        ts_file = os.path.join(ts_dir, f"{tool_name}_{qps}qps_timestamps.txt")
-        actual_runtime_ns = 0
-        if os.path.exists(ts_file):
-            actual_runtime_ns = read_first_last_timestamp(ts_file)
-
-        actual_qps = (resp_result.rx_total / actual_runtime_ns * 1e9) if actual_runtime_ns else 0.0
+        actual_qps = resp_result.rx_qps
+        log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
+                 actual_qps, resp_result.actual_duration_secs)
 
         row = {
-            "tool": tool_name,
+            "tool": tool.name,
             "requested_qps": qps,
             "achieved_qps_responder": actual_qps,
-            "actual_runtime_ns": actual_runtime_ns,
+            "actual_duration_secs": resp_result.actual_duration_secs,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,
-            "tool_reported_qps": tool_result.achieved_qps,
-            "tool_queries_sent": tool_result.queries_sent,
-            "tool_queries_completed": tool_result.queries_completed,
-            "tool_queries_lost": tool_result.queries_lost,
         }
-
-        if tool.reports_latency and tool_result.avg_latency is not None:
-            row["avg_latency_s"] = tool_result.avg_latency
-
         results.append(row)
-        log.info("Parsed %s at %d QPS: achieved %.0f QPS", tool_name, qps, actual_qps)
 
     if not results:
         log.error("No results parsed from raw files")
