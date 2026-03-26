@@ -46,6 +46,16 @@ script2:
 
 script3:
   min_qps: 100000
-  max_qps: 2000000
+  max_qps: 110000
   qps_step: 50000
   trials: 3
+  # Optional per-tool max QPS overrides (falls back to max_qps above)
+  #tool_max_qps:
+  #  dnsperf: 1500000
+  #  dnsperf-workbench-slice: 1500000
+  #  dnsperf-workbench-lencse: 1500000
+  #  dnspyre: 300000
+  #  dnspyre-workbench: 300000
+  #  dns64perf++: 2000000
+  #  dns64perfpp-workbench: 2000000
+  #  kxdpgun: 2000000
