@@ -1,11 +1,15 @@
+import logging
 import os
 from collections import defaultdict
 
 import math
+import yaml
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+log = logging.getLogger(__name__)
 
 
 def _interval_sort_key(label):
@@ -18,6 +22,49 @@ def _interval_sort_key(label):
     unit = m.group(2)
     multipliers = {"ns": 1, "ms": 1_000_000, "s": 1_000_000_000}
     return val * multipliers.get(unit, float("inf"))
+
+
+LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2)), (0, (1, 1)), (0, (3, 5, 1, 5))]
+MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
+COLORS = [
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+    "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+    "#bcbd22", "#17becf", "#aec7e8", "#ffbb78",
+]
+
+# Load fixed tool style registry from chart_config.yaml
+_TOOL_STYLE_REGISTRY = {}
+_CHART_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "chart_config.yaml",
+)
+if os.path.exists(_CHART_CONFIG_PATH):
+    with open(_CHART_CONFIG_PATH) as _f:
+        _chart_cfg = yaml.safe_load(_f) or {}
+    _TOOL_STYLE_REGISTRY = _chart_cfg.get("tool_styles", {})
+
+
+def _tool_style(tool_name, all_tools_sorted):
+    """Return a dict of plot kwargs (color, marker, linestyle) for a tool.
+
+    Uses the fixed index from chart_config.yaml if available, otherwise
+    falls back to the next unused index after the registry entries.
+    """
+    if tool_name in _TOOL_STYLE_REGISTRY:
+        i = _TOOL_STYLE_REGISTRY[tool_name]
+    else:
+        max_registered = max(_TOOL_STYLE_REGISTRY.values()) + 1 if _TOOL_STYLE_REGISTRY else 0
+        unknown_tools = sorted(t for t in all_tools_sorted if t not in _TOOL_STYLE_REGISTRY)
+        if tool_name in unknown_tools:
+            i = max_registered + unknown_tools.index(tool_name)
+        else:
+            i = max_registered
+        log.warning("Tool '%s' not in chart_config.yaml, using fallback index %d", tool_name, i)
+    return dict(
+        color=COLORS[i % len(COLORS)],
+        marker=MARKERS[i % len(MARKERS)],
+        linestyle=LINE_STYLES[i % len(LINE_STYLES)],
+    )
 
 
 def _trial_mean_std(rows, key):
@@ -49,14 +96,14 @@ def plot_max_throughput(results, output_dir):
         by_tool[tool][0].append(row["requested_qps"])
         by_tool[tool][1].append(row["achieved_qps_responder"])
 
-    LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2)), (0, (1, 1)), (0, (3, 5, 1, 5))]
-    MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
+    all_tools = sorted(by_tool.keys())
 
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    for i, (tool, (x, y)) in enumerate(sorted(by_tool.items())):
-        ax.plot(x, y, marker=MARKERS[i % len(MARKERS)], markersize=4,
-                linestyle=LINE_STYLES[i % len(LINE_STYLES)], linewidth=1.5, label=tool)
+    for tool in all_tools:
+        x, y = by_tool[tool]
+        style = _tool_style(tool, all_tools)
+        ax.plot(x, y, markersize=4, linewidth=1.5, label=tool, **style)
 
     # Plot ideal line (y=x)
     all_x = [row["requested_qps"] for row in results]
@@ -86,6 +133,7 @@ def plot_qps_accuracy(results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     intervals = set(row["interval"] for row in results if row["interval"] != "N/A")
+    all_tools = sorted(set(row["tool"] for row in results))
 
     for interval in sorted(intervals, key=_interval_sort_key):
         # Filter to this interval, average across trials
@@ -98,14 +146,15 @@ def plot_qps_accuracy(results, output_dir):
         # --- Mean QPS chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
             y_mean, y_err = [], []
             for qps in x_vals:
                 mean, std = _trial_mean_std(by_tool_qps[tool][qps], "mean_qps")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         if x_vals:
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
@@ -124,14 +173,15 @@ def plot_qps_accuracy(results, output_dir):
         # --- StdDev chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
             y_mean, y_err = [], []
             for qps in x_vals:
                 mean, std = _trial_mean_std(by_tool_qps[tool][qps], "stddev")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"QPS Standard Deviation ({interval} intervals)")
@@ -146,14 +196,15 @@ def plot_qps_accuracy(results, output_dir):
         # --- Max Deviation chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
             y_mean, y_err = [], []
             for qps in x_vals:
                 mean, std = _trial_mean_std(by_tool_qps[tool][qps], "max_deviation")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"Max Deviation from Target ({interval} intervals)")
@@ -187,14 +238,15 @@ def plot_qps_accuracy(results, output_dir):
             for metric_row, (key, ylabel, show_ideal) in enumerate(metrics_config):
                 ax = axes[metric_row][col]
                 for tool in sorted(by_tool_qps.keys()):
+                    style = _tool_style(tool, all_tools)
                     x_vals = sorted(by_tool_qps[tool].keys())
                     y_mean, y_err = [], []
                     for qps in x_vals:
                         mean, std = _trial_mean_std(by_tool_qps[tool][qps], key)
                         y_mean.append(mean)
                         y_err.append(std)
-                    ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o",
-                                markersize=3, capsize=3, label=tool)
+                    ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                                capsize=3, linewidth=1.5, label=tool, **style)
 
                 if show_ideal and x_vals:
                     ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
@@ -224,6 +276,7 @@ def plot_pps_accuracy(results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     intervals = set(row["interval"] for row in results if row["interval"] != "N/A")
+    all_tools = sorted(set(row["tool"] for row in results))
 
     for interval in sorted(intervals, key=_interval_sort_key):
         # Group by tool and expected_pps (interval-specific x-axis)
@@ -237,14 +290,15 @@ def plot_pps_accuracy(results, output_dir):
         # --- Mean PPS chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_pps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_pps[tool].keys())
             y_mean, y_err = [], []
             for exp_pps in x_vals:
                 mean, std = _trial_mean_std(by_tool_pps[tool][exp_pps], "mean_pps")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         if x_vals:
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
@@ -263,14 +317,15 @@ def plot_pps_accuracy(results, output_dir):
         # --- PPS StdDev chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_pps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_pps[tool].keys())
             y_mean, y_err = [], []
             for exp_pps in x_vals:
                 mean, std = _trial_mean_std(by_tool_pps[tool][exp_pps], "pps_stddev")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel(f"Expected PPS ({interval} intervals)")
         ax.set_ylabel(f"PPS Standard Deviation ({interval} intervals)")
@@ -285,14 +340,15 @@ def plot_pps_accuracy(results, output_dir):
         # --- PPS Max Deviation chart ---
         fig, ax = plt.subplots(figsize=(12, 7))
         for tool in sorted(by_tool_pps.keys()):
+            style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_pps[tool].keys())
             y_mean, y_err = [], []
             for exp_pps in x_vals:
                 mean, std = _trial_mean_std(by_tool_pps[tool][exp_pps], "pps_max_deviation")
                 y_mean.append(mean)
                 y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o", markersize=3,
-                        capsize=3, label=tool)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                        capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel(f"Expected PPS ({interval} intervals)")
         ax.set_ylabel(f"Max PPS Deviation from Expected ({interval} intervals)")
@@ -326,14 +382,15 @@ def plot_pps_accuracy(results, output_dir):
             for metric_row, (key, ylabel, show_ideal) in enumerate(metrics_config):
                 ax = axes[metric_row][col]
                 for tool in sorted(by_tool_pps.keys()):
+                    style = _tool_style(tool, all_tools)
                     x_vals = sorted(by_tool_pps[tool].keys())
                     y_mean, y_err = [], []
                     for exp_pps in x_vals:
                         mean, std = _trial_mean_std(by_tool_pps[tool][exp_pps], key)
                         y_mean.append(mean)
                         y_err.append(std)
-                    ax.errorbar(x_vals, y_mean, yerr=y_err, marker="o",
-                                markersize=3, capsize=3, label=tool)
+                    ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                                capsize=3, linewidth=1.5, label=tool, **style)
 
                 if show_ideal and x_vals:
                     ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],

@@ -1,0 +1,14 @@
+# Fixed tool style registry for charts.
+# Each tool maps to an index into the color/marker/linestyle palettes.
+# This ensures consistent styling across runs regardless of which tools are present.
+# To add a new tool, assign it the next available index.
+
+tool_styles:
+  dnsperf: 0
+  dnsperf-workbench-slice: 1
+  dnsperf-workbench-lencse: 2
+  dnspyre: 3
+  dnspyre-workbench: 4
+  dns64perf++: 5
+  dns64perfpp-workbench: 6
+  kxdpgun: 7

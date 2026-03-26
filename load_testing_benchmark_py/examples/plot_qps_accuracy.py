@@ -21,6 +21,8 @@ import logging
 import os
 import re
 import sys
+from multiprocessing import Pool, cpu_count
+
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -54,15 +56,64 @@ def load_from_csv(csv_path):
     return results
 
 
-def load_from_raw_dir(raw_dir, crop_s=0):
-    """Re-compute accuracy metrics from timestamp files in a directory.
+# --- helper for one file ---
+def _process_ts_file(args):
+    ts_file, crop_s = args
 
-    Expects raw_dir to contain a timestamps/ subdirectory, or to be the
-    timestamps directory itself.
-    """
+    filename = os.path.basename(ts_file)
+    m = TS_FILE_RE.match(filename)
+    if not m:
+        log.warning("Skipping unrecognized file: %s", filename)
+        return []
+
+    tool_name = m.group(1)
+    target_qps = int(m.group(2))
+    trial = int(m.group(3))
+
+    timestamps = read_timestamps_file(ts_file)
+    if len(timestamps) < 3:
+        log.warning("Too few timestamps in %s, skipping", filename)
+        return []
+
+    actual_runtime_ns = compute_actual_runtime(timestamps)
+    runtime_s = actual_runtime_ns / 1e9
+
+    accuracy = compute_accuracy_metrics(
+        timestamps, target_qps, runtime_s, crop_s=crop_s
+    )
+
+    rows = []
+    for label, metrics in accuracy.items():
+        rows.append({
+            "tool": tool_name,
+            "target_qps": target_qps,
+            "trial": trial + 1,
+            "interval": label,
+            "actual_runtime_ns": actual_runtime_ns,
+            "mean_qps": round(metrics.mean_qps, 2),
+            "stddev": round(metrics.stddev, 2),
+            "max_deviation": round(metrics.max_deviation, 2),
+            "expected_pps": round(metrics.expected_pps, 2),
+            "mean_pps": round(metrics.mean_pps, 2),
+            "pps_stddev": round(metrics.pps_stddev, 2),
+            "pps_max_deviation": round(metrics.pps_max_deviation, 2),
+            "responder_avg_rx_pps": 0,
+            "responder_rx_total": len(timestamps),
+            "responder_drops": 0,
+        })
+
+    log.info(
+        "Parsed %s at %d QPS trial %d: %d timestamps, %.1fs runtime",
+        tool_name, target_qps, trial, len(timestamps), runtime_s
+    )
+
+    return rows
+
+
+# --- main function ---
+def load_from_raw_dir(raw_dir, crop_s, processes=None):
     ts_dir = os.path.join(raw_dir, "timestamps")
     if not os.path.isdir(ts_dir):
-        # Maybe the user pointed directly at the timestamps dir
         if os.path.isdir(raw_dir) and glob.glob(os.path.join(raw_dir, "*_timestamps.txt")):
             ts_dir = raw_dir
         else:
@@ -74,53 +125,16 @@ def load_from_raw_dir(raw_dir, crop_s=0):
         log.error("No timestamp files found in %s", ts_dir)
         sys.exit(1)
 
-    # We need to infer the runtime from the timestamps themselves.
-    # Group files by (tool, qps) to detect the runtime.
-    results = []
+    ts_files = sorted(ts_files)
 
-    for ts_file in sorted(ts_files):
-        filename = os.path.basename(ts_file)
-        m = TS_FILE_RE.match(filename)
-        if not m:
-            log.warning("Skipping unrecognized file: %s", filename)
-            continue
+    # Default to all CPUs
+    processes = processes or cpu_count()
 
-        tool_name = m.group(1)
-        target_qps = int(m.group(2))
-        trial = int(m.group(3))
+    with Pool(processes) as pool:
+        all_results = pool.map(_process_ts_file, [(f, crop_s) for f in ts_files])
 
-        timestamps = read_timestamps_file(ts_file)
-        if len(timestamps) < 3:
-            log.warning("Too few timestamps in %s, skipping", filename)
-            continue
-
-        actual_runtime_ns = compute_actual_runtime(timestamps)
-        runtime_s = actual_runtime_ns / 1e9
-
-        accuracy = compute_accuracy_metrics(timestamps, target_qps, runtime_s, crop_s=crop_s)
-
-        for label, metrics in accuracy.items():
-            row = {
-                "tool": tool_name,
-                "target_qps": target_qps,
-                "trial": trial + 1,
-                "interval": label,
-                "actual_runtime_ns": actual_runtime_ns,
-                "mean_qps": round(metrics.mean_qps, 2),
-                "stddev": round(metrics.stddev, 2),
-                "max_deviation": round(metrics.max_deviation, 2),
-                "expected_pps": round(metrics.expected_pps, 2),
-                "mean_pps": round(metrics.mean_pps, 2),
-                "pps_stddev": round(metrics.pps_stddev, 2),
-                "pps_max_deviation": round(metrics.pps_max_deviation, 2),
-                "responder_avg_rx_pps": 0,
-                "responder_rx_total": len(timestamps),
-                "responder_drops": 0,
-            }
-            results.append(row)
-
-        log.info("Parsed %s at %d QPS trial %d: %d timestamps, %.1fs runtime",
-                 tool_name, target_qps, trial, len(timestamps), runtime_s)
+    # Flatten results
+    results = [row for sublist in all_results for row in sublist]
 
     return results
 
