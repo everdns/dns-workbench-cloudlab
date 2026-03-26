@@ -59,6 +59,10 @@ case "$1" in
         echo "Stopping unbound..."
         sudo pkill unbound 2>/dev/null
         ;;
+    unbound-ns)
+        echo "Stopping unbound..."
+        sudo pkill unbound 2>/dev/null
+        ;;
     *)
         echo "Unknown software: $1"
         echo "Options: bind-resolver, bind-ns, powerdns-resolver, powerdns-ns, knot-resolver, knot-ns, nsd-ns, unbound-resolver"
