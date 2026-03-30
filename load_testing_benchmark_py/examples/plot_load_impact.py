@@ -17,6 +17,7 @@ The raw data directory should contain a raw/ subdirectory with files like:
 import argparse
 import csv
 import glob
+import json
 import logging
 import os
 import re
@@ -170,6 +171,19 @@ def main():
     else:
         results = load_from_raw_dir(args.raw_dir)
         log.info("Parsed %d result rows from raw output files", len(results))
+        if results:
+            os.makedirs(args.output_dir, exist_ok=True)
+            csv_path = os.path.join(args.output_dir, "results.csv")
+            all_fields = list(dict.fromkeys(k for row in results for k in row.keys()))
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=all_fields, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(results)
+            log.info("Saved CSV to %s", csv_path)
+            json_path = os.path.join(args.output_dir, "results.json")
+            with open(json_path, "w") as f:
+                json.dump(results, f, indent=2, default=str)
+            log.info("Saved JSON to %s", json_path)
 
     if not results:
         log.error("No results to plot")
