@@ -92,6 +92,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |
 | `-T, --ts-range` | Track min/max RX timestamps, report actual QPS | — |
 | `-N, --nxdomain` | Always return NXDOMAIN (fast path, minimal stats)| — |
+| `-C, --count-only` | Count packets only, don't respond (ultra-fast mode) | — |
 | `-x, --xdp-prog FILE` | Path to XDP object file | `./xdp/xdp_dns_redirect.o` |
 | `-v, --verbose` | Print per-thread breakdown | off |
 
@@ -110,6 +111,11 @@ sudo ./dns_responder -i eth1 -d 30 -o results.txt -v
 Track actual QPS based on first-to-last packet timing:
 ```sh
 sudo ./dns_responder -i eth1 -d 30 -T
+```
+
+Count-only mode (no responses, minimal overhead, compatible with kxdpgun):
+```sh
+sudo ./dns_responder -i eth1 -C -T -d 30
 ```
 
 Specify queue count (match NIC RSS config):
@@ -132,12 +138,22 @@ sudo ./dns_responder -i eth1 -d 35
 
 ### kxdpgun
 
+For raw packet counting (bypassing DNS response generation entirely):
+```sh
+# On the load generator host:
+sudo kxdpgun -t 30 -Q 3000000 -i eth1 <responder_ip>
+
+# On the responder host (count-only mode):
+sudo ./dns_responder -i eth1 -C -T -d 35
+```
+
+For full DNS response generation:
 ```sh
 # On the load generator host:
 sudo kxdpgun -t 30 -Q 3000000 -i eth1 <responder_ip>
 
 # On the responder host:
-sudo ./dns_responder -i eth1 -d 35
+sudo ./dns_responder -i eth1 -T -d 35
 ```
 
 ### dns64perf++
@@ -187,7 +203,23 @@ Actual traffic window: 29.847s (first pkt to last pkt)
   TX QPS:          1503791 qps (1.50 Mqps)
 ```
 
-Unlike `-t` (which writes every per-packet timestamp to a file), `-T` has negligible overhead — just one `clock_gettime` call and two comparisons per packet, with no memory allocation.
+Unlike `-t` (which writes every per-packet timestamp to a file), `-T` has negligible overhead. In standard response mode, it uses one per-packet `clock_gettime` call (~30 ns). In count-only mode (`-C -T`), the overhead is even lighter — just one `clock_gettime` per batch (~50–100 µs apart), enabling accurate measurement even at 5M+ pps while maintaining sub-millisecond window accuracy.
+
+## Count-Only Mode (`-C`)
+
+The `-C` / `--count-only` flag enables an ultra-minimal mode designed for high-performance load measurement scenarios. Instead of generating DNS responses, the responder:
+
+1. Receives packets on the AF_XDP socket
+2. Counts them per-thread
+3. Returns frames to the fill ring
+4. Produces aggregate RX statistics
+
+This mode is optimized for:
+- Measuring raw packet reception rates with kxdpgun or other AF_XDP load generators
+- Eliminating response generation overhead to focus on NIC/kernel performance
+- Accurate QPS tracking when combined with `-T` (one `clock_gettime` per batch, ~0.06% overhead at 5M pps)
+
+Unlike `--nxdomain`, count-only mode has no packet processing logic (no DNS header parsing, no answer templates), making it the absolute fastest path for pure packet counting.
 
 ## Benchmark Methodology
 
