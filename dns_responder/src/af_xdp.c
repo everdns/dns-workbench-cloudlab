@@ -433,6 +433,61 @@ void *worker_thread_nxdomain(void *arg)
 	return NULL;
 }
 
+void *worker_thread_count_only(void *arg)
+{
+	struct worker_ctx *ctx = (struct worker_ctx *)arg;
+	struct xsk_info *xsk = &ctx->xsk;
+	int batch_size = ctx->batch_size;
+
+	/* Initialize timestamp tracking */
+	if (ctx->record_timestamps == 2) {
+		ctx->ts_min_ns = UINT64_MAX;
+		ctx->ts_max_ns = 0;
+	}
+
+	while (__builtin_expect(*ctx->running, 1)) {
+		uint32_t rx_idx = 0;
+
+		reclaim_completion(xsk);
+		refill_fill_ring(xsk);
+
+		uint32_t rx_count = xsk_ring_cons__peek(&xsk->rx, batch_size,
+							&rx_idx);
+		if (rx_count == 0) {
+			struct pollfd fds = {
+				.fd = xsk_socket__fd(xsk->xsk),
+				.events = POLLIN,
+			};
+			poll(&fds, 1, 10);
+			continue;
+		}
+
+		/* Record timestamp once per batch (not per-packet) for min/max tracking */
+		if (ctx->record_timestamps == 2) {
+			struct timespec now;
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			uint64_t rel = timespec_to_ns(&now) - timespec_to_ns(&ctx->start_time);
+			if (rel < ctx->ts_min_ns) ctx->ts_min_ns = rel;
+			if (rel > ctx->ts_max_ns) ctx->ts_max_ns = rel;
+		}
+
+		/* Just count the packets and return them to the fill ring */
+		for (uint32_t i = 0; i < rx_count; i++) {
+			const struct xdp_desc *rx_desc;
+			rx_desc = xsk_ring_cons__rx_desc(&xsk->rx, rx_idx + i);
+
+			uint64_t addr = rx_desc->addr;
+			ctx->stats.rx_packets++;
+
+			free_frame(xsk, addr);
+		}
+
+		xsk_ring_cons__release(&xsk->rx, rx_count);
+	}
+
+	return NULL;
+}
+
 void xsk_cleanup(struct xsk_info *xsk)
 {
 	if (xsk->xsk)

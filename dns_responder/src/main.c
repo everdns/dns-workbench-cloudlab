@@ -43,6 +43,7 @@ struct config {
 	char timestamps_path[512];
 	int  ts_range;            /* track min/max timestamps for QPS */
 	int  nxdomain;            /* always return NXDOMAIN (fast path) */
+	int  count_only;          /* count packets only, don't respond */
 };
 
 static void config_defaults(struct config *cfg)
@@ -79,6 +80,7 @@ static void usage(const char *prog)
 		"  -t, --timestamps FILE    Write per-packet RX timestamps to file\n"
 	"  -T, --ts-range           Track min/max RX timestamps for actual QPS\n"
 		"  -N, --nxdomain           Always return NXDOMAIN (fast path, minimal stats)\n"
+		"  -C, --count-only         Count packets only, don't respond (ultra-fast)\n"
 		"  -x, --xdp-prog FILE      Path to XDP object file\n"
 		"  -v, --verbose            Print per-thread stats\n"
 		"  -h, --help               Show this help\n",
@@ -95,6 +97,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		{ "timestamps",  required_argument, NULL, 't' },
 		{ "ts-range",    no_argument,       NULL, 'T' },
 		{ "nxdomain",    no_argument,       NULL, 'N' },
+		{ "count-only",  no_argument,       NULL, 'C' },
 		{ "zerocopy",    no_argument,       NULL, 'z' },
 		{ "no-zerocopy", no_argument,       NULL, 'Z' },
 		{ "batch-size",  required_argument, NULL, 'b' },
@@ -106,7 +109,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TNzZb:f:x:vh",
+	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TNCzZb:f:x:vh",
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -131,6 +134,9 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 			break;
 		case 'N':
 			cfg->nxdomain = 1;
+			break;
+		case 'C':
+			cfg->count_only = 1;
 			break;
 		case 'z':
 			cfg->zerocopy = 2; /* force */
@@ -312,7 +318,9 @@ int main(int argc, char **argv)
 	fprintf(stderr, "  Zero-copy:  %s\n",
 		cfg.zerocopy == 2 ? "forced" :
 		cfg.zerocopy == 1 ? "preferred" : "disabled");
-	if (cfg.nxdomain)
+	if (cfg.count_only)
+		fprintf(stderr, "  Mode:       Count only (ultra-fast)\n");
+	else if (cfg.nxdomain)
 		fprintf(stderr, "  Mode:       NXDOMAIN (fast path)\n");
 	if (cfg.duration > 0)
 		fprintf(stderr, "  Duration:   %d seconds\n", cfg.duration);
@@ -320,8 +328,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "  Duration:   until SIGINT/SIGTERM\n");
 	fprintf(stderr, "\n");
 
-	/* Initialize DNS response templates (not needed for NXDOMAIN mode) */
-	if (!cfg.nxdomain)
+	/* Initialize DNS response templates (not needed for NXDOMAIN or count-only mode) */
+	if (!cfg.nxdomain && !cfg.count_only)
 		dns_templates_init();
 
 	/* Set up signal handlers */
@@ -424,8 +432,13 @@ int main(int argc, char **argv)
 		workers[q].start_time = start_time;
 
 	/* Launch worker threads */
-	void *(*thread_fn)(void *) = cfg.nxdomain ? worker_thread_nxdomain
-						   : worker_thread;
+	void *(*thread_fn)(void *);
+	if (cfg.count_only)
+		thread_fn = worker_thread_count_only;
+	else if (cfg.nxdomain)
+		thread_fn = worker_thread_nxdomain;
+	else
+		thread_fn = worker_thread;
 	for (int q = 0; q < cfg.num_queues; q++) {
 		if (pthread_create(&threads[q], NULL, thread_fn,
 				   &workers[q]) != 0) {
@@ -487,7 +500,7 @@ join:
 			}
 		}
 
-		if (cfg.nxdomain) {
+		if (cfg.nxdomain || cfg.count_only) {
 			stats_print_nxdomain(stderr, all_stats,
 					     cfg.num_queues, duration);
 		} else {
@@ -505,7 +518,7 @@ join:
 		if (cfg.output_path[0] != '\0') {
 			FILE *f = fopen(cfg.output_path, "w");
 			if (f) {
-				if (cfg.nxdomain) {
+				if (cfg.nxdomain || cfg.count_only) {
 					stats_print_nxdomain(f, all_stats,
 							     cfg.num_queues,
 							     duration);

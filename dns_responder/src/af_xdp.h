@@ -90,6 +90,14 @@ void *worker_thread(void *arg);
 void *worker_thread_nxdomain(void *arg);
 
 /*
+ * Count-only worker thread entry point.
+ * Minimal loop that just counts received packets without responding.
+ * Optimized for high-performance measurement scenarios.
+ * Only tracks rx_packets for stats.
+ */
+void *worker_thread_count_only(void *arg);
+
+/*
  * Cleanup AF_XDP socket and UMEM resources.
  */
 void xsk_cleanup(struct xsk_info *xsk);

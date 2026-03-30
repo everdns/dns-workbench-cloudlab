@@ -116,6 +116,26 @@ void stats_print_nxdomain(FILE *stream, const struct thread_stats *stats,
 			(double)total / duration_secs / 1e6);
 	}
 
+	/* Compute actual traffic window from first to last packet timestamps */
+	uint64_t global_min = UINT64_MAX;
+	uint64_t global_max = 0;
+	for (int i = 0; i < num_threads; i++) {
+		if (stats[i].ts_min_ns < global_min)
+			global_min = stats[i].ts_min_ns;
+		if (stats[i].ts_max_ns > global_max)
+			global_max = stats[i].ts_max_ns;
+	}
+
+	if (global_max > global_min && global_max != 0) {
+		double actual_secs = (double)(global_max - global_min) / 1e9;
+		fprintf(stream, "\nActual traffic window: %.3fs (first pkt to last pkt)\n",
+			actual_secs);
+		fprintf(stream, "  %-16s %.0f pps (%.2f Mpps)\n",
+			"Actual throughput:",
+			(double)total / actual_secs,
+			(double)total / actual_secs / 1e6);
+	}
+
 	fprintf(stream, "\nPer-thread:\n");
 	for (int i = 0; i < num_threads; i++)
 		fprintf(stream, "  Thread %-4d %'lu\n", i,
