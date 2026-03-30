@@ -62,13 +62,13 @@ def parse_dns_responder_output(text):
             return float(m.group(1).replace(",", ""))
         return 0.0
 
-    result.rx_total = parse_int(r"RX total:\s+([\d,]+)")
+    result.rx_total = parse_int(r"RX total:\s+([\d,]+)") or parse_int(r"Total packets:\s+([\d,]+)")
     result.tx_total = parse_int(r"TX total:\s+([\d,]+)")
     result.parse_errors = parse_int(r"Parse errors:\s+([\d,]+)")
     result.drops = parse_int(r"Drops:\s+([\d,]+)")
-    result.avg_rx_pps = parse_float(r"Avg RX:\s+([\d,.]+)\s+pps")
+    result.avg_rx_pps = parse_float(r"Avg RX:\s+([\d,.]+)\s+pps") or parse_float(r"Avg throughput:\s+([\d,.]+)\s+pps")
     result.avg_tx_pps = parse_float(r"Avg TX:\s+([\d,.]+)\s+pps")
-    result.rx_qps = parse_float(r"RX QPS:\s+([\d,.]+)\s+qps")
+    result.rx_qps = parse_float(r"RX QPS:\s+([\d,.]+)\s+qps") or parse_float(r"Actual throughput:\s+([\d,.]+)\s+pps")
     result.actual_duration_secs = parse_float(r"Actual traffic window:\s+([\d,.]+)s")
 
     return result
