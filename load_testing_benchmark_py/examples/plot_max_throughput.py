@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Generate max_throughput charts by re-parsing raw output files.
+"""Generate max_throughput charts from a CSV file or raw output directory.
 
 Usage:
-    python examples/plot_max_throughput.py /path/to/dir/
-    python examples/plot_max_throughput.py /path/to/dir/ --output-dir my_charts/
+    # From CSV:
+    python examples/plot_max_throughput.py --csv /path/to/results.csv
 
-The input directory should contain raw/ and timestamps/ subdirectories.
+    # From raw data directory:
+    python examples/plot_max_throughput.py --raw-dir /path/to/max_throughput/
+
+    # Custom output directory:
+    python examples/plot_max_throughput.py --csv results.csv --output-dir my_charts/
+
+The raw data directory should contain raw/ and timestamps/ subdirectories.
 """
 import argparse
+import csv
 import glob
+import json
 import logging
 import os
 import re
@@ -22,8 +30,8 @@ from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
 
-# Matches filenames like "dnspyre_200000qps_tool.txt" or "dnspyre-workbench_100000qps_tool.txt"
-TOOL_FILE_RE = re.compile(r"^(.+)_(\d+)qps_tool\.txt$")
+# Matches filenames like "dnspyre_200000qps_tool.txt" or "dnspyre-workbench_100000qps_trial1_tool.txt"
+TOOL_FILE_RE = re.compile(r"^(.+)_(\d+)qps(?:_trial\d+)?_tool\.txt$")
 
 
 def parse_tool_stdout(raw_text):
@@ -36,28 +44,37 @@ def parse_tool_stdout(raw_text):
     return stdout_part.rstrip("\n")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Generate max_throughput charts from raw output files"
-    )
-    parser.add_argument("results_dir", help="Directory containing raw/ and timestamps/ subdirectories")
-    parser.add_argument("--output-dir", default="charts", help="Directory to save charts (default: charts/)")
-    args = parser.parse_args()
+def load_from_csv(csv_path):
+    """Load results from a CSV file."""
+    results = []
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            for key in ("requested_qps", "trial", "rx_total", "tx_total", "drops",
+                        "tool_queries_sent", "tool_queries_completed", "tool_queries_lost"):
+                if key in row and row[key]:
+                    row[key] = int(float(row[key]))
+            for key in ("achieved_qps_responder", "actual_duration_secs",
+                        "tool_reported_qps", "avg_latency_s"):
+                if key in row and row[key]:
+                    row[key] = float(row[key])
+                elif key in row and not row[key]:
+                    row[key] = None
+            if "timed_out" in row:
+                row["timed_out"] = row["timed_out"].lower() in ("true", "1", "yes")
+            results.append(row)
+    return results
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
 
-    raw_dir = os.path.join(args.results_dir, "raw")
-    ts_dir = os.path.join(args.results_dir, "timestamps")
+def load_from_raw_dir(results_dir):
+    """Load results by re-parsing raw tool output files."""
+    raw_dir = os.path.join(results_dir, "raw")
 
     tool_files = glob.glob(os.path.join(raw_dir, "*_tool.txt"))
     if not tool_files:
         log.error("No raw tool output files found in %s", raw_dir)
         sys.exit(1)
 
-    # Cache tool instances to avoid re-creating for each file
     tool_cache = {}
     results = []
 
@@ -71,7 +88,6 @@ def main():
         tool_name = m.group(1)
         qps = int(m.group(2))
 
-        # Get or create tool instance
         if tool_name not in tool_cache:
             try:
                 tool_cache[tool_name] = get_tools([tool_name])[0]
@@ -81,14 +97,13 @@ def main():
 
         tool = tool_cache[tool_name]
 
-        # Read and parse tool output
         with open(tool_file) as f:
             raw_text = f.read()
         stdout = parse_tool_stdout(raw_text)
         tool_result = tool.parse_output(stdout)
 
-        # Read and parse dns_responder output
-        resp_file = os.path.join(raw_dir, f"{tool_name}_{qps}qps_responder.txt")
+        # Derive responder filename from tool filename
+        resp_file = tool_file.replace("_tool.txt", "_responder.txt")
         if not os.path.exists(resp_file):
             log.warning("Missing responder file for %s at %d QPS, skipping", tool_name, qps)
             continue
@@ -110,12 +125,54 @@ def main():
         }
         results.append(row)
 
+    return results
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate max_throughput charts from CSV or raw data"
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--csv", help="Path to results CSV file")
+    source.add_argument("--raw-dir", help="Directory containing raw/ and timestamps/ subdirectories")
+    parser.add_argument("--output-dir", default="charts", help="Directory to save charts (default: charts/)")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    log.info("=== plot_max_throughput ===")
+    log.info("  Source: %s", args.csv if args.csv else args.raw_dir)
+    log.info("  Output dir: %s", args.output_dir)
+
+    if args.csv:
+        results = load_from_csv(args.csv)
+        log.info("Loaded %d rows from %s", len(results), args.csv)
+    else:
+        results = load_from_raw_dir(args.raw_dir)
+        log.info("Parsed %d result rows from raw output files", len(results))
+        if results:
+            os.makedirs(args.output_dir, exist_ok=True)
+            csv_path = os.path.join(args.output_dir, "results.csv")
+            all_fields = list(dict.fromkeys(k for row in results for k in row.keys()))
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=all_fields, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(results)
+            log.info("Saved CSV to %s", csv_path)
+            json_path = os.path.join(args.output_dir, "results.json")
+            with open(json_path, "w") as f:
+                json.dump(results, f, indent=2, default=str)
+            log.info("Saved JSON to %s", json_path)
+
     if not results:
-        log.error("No results parsed from raw files")
+        log.error("No results to plot")
         sys.exit(1)
 
     tools_found = sorted(set(r["tool"] for r in results))
-    log.info("Parsed %d results for tools: %s", len(results), tools_found)
+    log.info("Tools: %s", tools_found)
 
     results.sort(key=lambda r: (r["tool"], r["requested_qps"]))
     plot_max_throughput(results, args.output_dir)
