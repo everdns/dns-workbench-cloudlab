@@ -35,7 +35,7 @@ from benchmark.tools import get_tools
 log = logging.getLogger(__name__)
 
 
-def run_single_test(config, tool, qps, store, script_name):
+def run_single_test(config, tool, qps, store, script_name, trial=1):
     """Run a single throughput test for one tool at one QPS level.
 
     Returns a result dict or None on failure.
@@ -82,7 +82,7 @@ def run_single_test(config, tool, qps, store, script_name):
         # Save raw tool output
         store.save_raw_output(
             script_name,
-            f"{tool.name}_{qps}qps_tool.txt",
+            f"{tool.name}_{qps}qps_trial{trial}_tool.txt",
             f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}"
             + ("\n=== TIMED OUT ===" if tool_timed_out else ""),
         )
@@ -102,7 +102,7 @@ def run_single_test(config, tool, qps, store, script_name):
             resp_text = f.read()
 
         store.save_raw_output(
-            script_name, f"{tool.name}_{qps}qps_responder.txt", resp_text,
+            script_name, f"{tool.name}_{qps}qps_trial{trial}_responder.txt", resp_text,
         )
 
         # Parse outputs — RX QPS is computed by dns_responder via -T flag
@@ -114,6 +114,7 @@ def run_single_test(config, tool, qps, store, script_name):
         row = {
             "tool": tool.name,
             "requested_qps": qps,
+            "trial": trial,
             "achieved_qps_responder": actual_qps,
             "actual_duration_secs": resp_result.actual_duration_secs,
             "rx_total": resp_result.rx_total,
@@ -163,6 +164,7 @@ def main():
     start_qps = s1["start_qps"]
     qps_step = s1["qps_step"]
     max_qps = s1["max_qps"]
+    num_trials = s1.get("trials", 1)
 
     tools = get_tools(config.get("tools"))
     output_dir = args.output_dir
@@ -172,16 +174,24 @@ def main():
     log.info("=== Maximum Throughput Discovery ===")
     log.info("Tools: %s", [t.name for t in tools])
     log.info("QPS range: %d -> %d (step %d)", start_qps, max_qps, qps_step)
+    log.info("Trials per QPS: %d", num_trials)
     log.info("Runtime: %ds, Pause: %ds", config["runtime"], config["pause_between_runs"])
 
     for tool in tools:
         log.info("--- Starting throughput discovery for %s ---", tool.name)
         qps = start_qps
         while qps <= max_qps:
-            try:
-                run_single_test(config, tool, qps, store, script_name)
-            except Exception as e:
-                log.error("Unhandled error for %s at %d QPS: %s", tool.name, qps, e)
+            for trial in range(1, num_trials + 1):
+                if num_trials > 1:
+                    log.info("Trial %d/%d for %s at %d QPS", trial, num_trials, tool.name, qps)
+                try:
+                    run_single_test(config, tool, qps, store, script_name, trial=trial)
+                except Exception as e:
+                    log.error("Unhandled error for %s at %d QPS trial %d: %s", tool.name, qps, trial, e)
+
+                if trial < num_trials and not config.get("dry_run"):
+                    log.info("Pausing %ds before next trial...", config["pause_between_runs"])
+                    time.sleep(config["pause_between_runs"])
 
             qps += qps_step
 

@@ -76,6 +76,7 @@ def add_script1_args(parser):
     parser.add_argument("--start-qps", type=int, help="Starting QPS")
     parser.add_argument("--qps-step", type=int, help="QPS increment per iteration")
     parser.add_argument("--max-qps", type=int, help="Maximum QPS to test")
+    parser.add_argument("--trials", type=int, help="Number of trials per QPS level")
 
 
 def add_script2_args(parser):
@@ -105,6 +106,8 @@ def apply_script1_overrides(config, args):
         s1["qps_step"] = args.qps_step
     if args.max_qps is not None:
         s1["max_qps"] = args.max_qps
+    if getattr(args, "trials", None) is not None:
+        s1["trials"] = args.trials
     return config
 
 

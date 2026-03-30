@@ -64,9 +64,10 @@ Key options:
 --start-qps N       Starting QPS (default: 200000)
 --qps-step N        QPS increment per step (default: 10000)
 --max-qps N         Maximum QPS to test (default: 5000000)
+--trials N          Trials per QPS level (default: 1)
 ```
 
-**Output:** CSV/JSON with requested vs. achieved QPS per tool, plus a line chart.
+**Output:** CSV/JSON with requested vs. achieved QPS per tool, plus a chart. When `--trials N` is used with N > 1, each data point shows mean ± stddev error bars across trials.
 
 ### Script 2: QPS Accuracy Evaluation
 
