@@ -30,6 +30,7 @@ timeout: 1
 subnet: "10.0.0.0/4"
 runtime: 10
 dns_responder_margin: 10
+dns_responder_batch_size: 64
 dns_responder_recieve_only: false
 pause_between_runs: 5
 max_delay_between_bursts: 10000000

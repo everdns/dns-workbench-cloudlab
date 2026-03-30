@@ -126,6 +126,7 @@ All scripts share these flags:
 --output-dir DIR         Output directory (default: results/)
 --runtime N              Test duration in seconds (default: 10)
 --threads N              Number of threads (default: 20)
+--dns-responder-batch-size N  Batch size for dns_responder (default: from config.yaml)
 --recieve-only           Run dns_responder in receive-only mode (no responses sent)
 --dry-run                Print commands without executing
 ```

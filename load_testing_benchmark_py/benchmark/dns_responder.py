@@ -25,6 +25,7 @@ def start_dns_responder(config, duration, output_file="/tmp/dns_responder_output
     """
     server = config["hosts"]["server"]
     interface = config["server_interface"]
+    batch_size = config["dns_responder_batch_size"]
     responder_cfg = config.get("dns_responder", {})
     binary = responder_cfg.get("path", "dns_responder")
     xdp_prog = responder_cfg.get("xdp_prog", "")
@@ -34,6 +35,7 @@ def start_dns_responder(config, duration, output_file="/tmp/dns_responder_output
         f"-i {interface}",
         f"-d {duration}",
         f"-o {output_file}",
+        f"-b {batch_size}"
     ]
     if xdp_prog:
         cmd_parts.append(f"-x {xdp_prog}")

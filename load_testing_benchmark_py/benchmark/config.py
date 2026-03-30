@@ -27,6 +27,7 @@ def apply_cli_overrides(config, args):
         "dns_responder_margin": args.dns_responder_margin,
         "pause_between_runs": args.pause_between_runs,
         "max_delay_between_bursts": args.max_delay_between_bursts,
+        "dns_responder_batch_size": args.dns_responder_batch_size,
     }
     if args.server:
         config.setdefault("hosts", {})["server"] = args.server
@@ -71,9 +72,8 @@ def add_common_args(parser):
     parser.add_argument("--tools", nargs="+", help="Subset of tools to test")
     parser.add_argument("--output-dir", default="results", help="Output directory for results")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
-    parser.add_argument("--recieve-only", action="store_true", default=None,
-                        help="Run dns_responder in receive-only mode (no responses sent)")
-
+    parser.add_argument("--recieve-only", action="store_true", default=None, help="Run dns_responder in receive-only mode (no responses sent)")
+    parser.add_argument("--dns-responder-batch-size", type=int, help="Batch size for dns_responder (-b flag)")
 
 def add_script1_args(parser):
     """Add Script 1 (max throughput) specific arguments."""
