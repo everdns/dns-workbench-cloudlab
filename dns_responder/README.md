@@ -91,6 +91,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-f, --frame-count N` | UMEM frames per queue | 4096 |
 | `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |
 | `-T, --ts-range` | Track min/max RX timestamps, report actual QPS | — |
+| `-N, --nxdomain` | Always return NXDOMAIN (fast path, minimal stats)| — |
 | `-x, --xdp-prog FILE` | Path to XDP object file | `./xdp/xdp_dns_redirect.o` |
 | `-v, --verbose` | Print per-thread breakdown | off |
 
