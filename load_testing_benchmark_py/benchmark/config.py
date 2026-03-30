@@ -43,6 +43,8 @@ def apply_cli_overrides(config, args):
 
     if args.tools:
         config["tools"] = args.tools
+    if getattr(args, "recieve_only", None):
+        config["dns_responder_recieve_only"] = True
 
     return config
 
@@ -69,6 +71,8 @@ def add_common_args(parser):
     parser.add_argument("--tools", nargs="+", help="Subset of tools to test")
     parser.add_argument("--output-dir", default="results", help="Output directory for results")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
+    parser.add_argument("--recieve-only", action="store_true", default=None,
+                        help="Run dns_responder in receive-only mode (no responses sent)")
 
 
 def add_script1_args(parser):

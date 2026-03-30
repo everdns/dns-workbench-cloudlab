@@ -55,7 +55,7 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
         return None
 
     # Start dns_responder on server
-    session = run_dns_responder_session(config, timestamps=True)
+    session = run_dns_responder_session(config, timestamps=True, recieve_only=config.get("dns_responder_recieve_only", False))
 
     tool_timed_out = False
     tool_stdout = ""

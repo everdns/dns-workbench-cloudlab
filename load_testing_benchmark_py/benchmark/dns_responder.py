@@ -9,7 +9,8 @@ log = logging.getLogger(__name__)
 
 def start_dns_responder(config, duration, output_file="/tmp/dns_responder_output.txt",
                         timestamps=False,
-                        timestamps_file=None):
+                        timestamps_file=None,
+                        recieve_only=False):
     """Start dns_responder on the server host.
 
     Args:
@@ -38,6 +39,8 @@ def start_dns_responder(config, duration, output_file="/tmp/dns_responder_output
         cmd_parts.append(f"-x {xdp_prog}")
     if timestamps:
         cmd_parts.append("-T")
+    if recieve_only:
+        cmd_parts.append("-C")
     if timestamps_file:
         cmd_parts.append(f"-t {timestamps_file}")
 
@@ -86,7 +89,7 @@ def collect_dns_responder_output(config, remote_output_file, local_dir,
     return local_output, local_ts
 
 
-def run_dns_responder_session(config, timestamps=False, timestamps_file=False):
+def run_dns_responder_session(config, timestamps=False, timestamps_file=False, recieve_only=False):
     """Convenience: start dns_responder, return context for a test run.
 
     Returns a dict with keys: proc, output_file, timestamps_file, duration.
@@ -98,7 +101,7 @@ def run_dns_responder_session(config, timestamps=False, timestamps_file=False):
     output_file = "/tmp/dns_responder_output.txt"
     ts_file = "/tmp/dns_responder_timestamps.txt" if timestamps_file else None
 
-    proc = start_dns_responder(config, duration, output_file, timestamps, ts_file)
+    proc = start_dns_responder(config, duration, output_file, timestamps, ts_file, recieve_only)
 
     # Wait for dns_responder to initialize
     time.sleep(margin)

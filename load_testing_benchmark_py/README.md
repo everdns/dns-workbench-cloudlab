@@ -65,6 +65,7 @@ Key options:
 --qps-step N        QPS increment per step (default: 10000)
 --max-qps N         Maximum QPS to test (default: 5000000)
 --trials N          Trials per QPS level (default: 1)
+--recieve-only      Run dns_responder in receive-only mode (no responses sent)
 ```
 
 **Output:** CSV/JSON with requested vs. achieved QPS per tool, plus a chart. When `--trials N` is used with N > 1, each data point shows mean ± stddev error bars across trials.
@@ -125,6 +126,7 @@ All scripts share these flags:
 --output-dir DIR         Output directory (default: results/)
 --runtime N              Test duration in seconds (default: 10)
 --threads N              Number of threads (default: 20)
+--recieve-only           Run dns_responder in receive-only mode (no responses sent)
 --dry-run                Print commands without executing
 ```
 
