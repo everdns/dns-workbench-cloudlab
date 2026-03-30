@@ -84,26 +84,30 @@ def plot_max_throughput(results, output_dir):
     """Plot requested vs achieved QPS per tool (Script 1).
 
     Args:
-        results: list of dicts with keys: tool, requested_qps, achieved_qps_responder
+        results: list of dicts with keys: tool, requested_qps, achieved_qps_responder, trial
         output_dir: directory to save charts
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Group by tool
-    by_tool = defaultdict(lambda: ([], []))
+    # Group by tool -> requested_qps -> list of achieved values (across trials)
+    by_tool_qps = defaultdict(lambda: defaultdict(list))
     for row in results:
-        tool = row["tool"]
-        by_tool[tool][0].append(row["requested_qps"])
-        by_tool[tool][1].append(row["achieved_qps_responder"])
+        by_tool_qps[row["tool"]][row["requested_qps"]].append(row)
 
-    all_tools = sorted(by_tool.keys())
+    all_tools = sorted(by_tool_qps.keys())
 
     fig, ax = plt.subplots(figsize=(12, 7))
 
     for tool in all_tools:
-        x, y = by_tool[tool]
         style = _tool_style(tool, all_tools)
-        ax.plot(x, y, markersize=4, linewidth=1.5, label=tool, **style)
+        x_vals = sorted(by_tool_qps[tool].keys())
+        y_mean, y_err = [], []
+        for qps in x_vals:
+            mean, std = _trial_mean_std(by_tool_qps[tool][qps], "achieved_qps_responder")
+            y_mean.append(mean)
+            y_err.append(std)
+        ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                    capsize=3, linewidth=1.5, label=tool, **style)
 
     # Plot ideal line (y=x)
     all_x = [row["requested_qps"] for row in results]
@@ -118,7 +122,7 @@ def plot_max_throughput(results, output_dir):
     ax.legend(loc="upper left", fontsize=8)
     ax.grid(True, alpha=0.3)
 
-    path = os.path.join(output_dir, "requested_vs_achieved.png")
+    path = os.path.join(output_dir, "requested_vs_achieved.pdf")
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -166,7 +170,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"accuracy_mean_{interval}.png")
+        path = os.path.join(output_dir, f"accuracy_mean_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -189,7 +193,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"accuracy_stddev_{interval}.png")
+        path = os.path.join(output_dir, f"accuracy_stddev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -212,7 +216,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"accuracy_maxdev_{interval}.png")
+        path = os.path.join(output_dir, f"accuracy_maxdev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -260,7 +264,7 @@ def plot_qps_accuracy(results, output_dir):
 
         fig.suptitle("QPS Accuracy: All Metrics and Intervals", fontsize=14, y=1.01)
         fig.tight_layout()
-        path = os.path.join(output_dir, "qps_accuracy_combined.png")
+        path = os.path.join(output_dir, "qps_accuracy_combined.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -310,7 +314,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"pps_mean_{interval}.png")
+        path = os.path.join(output_dir, f"pps_mean_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -333,7 +337,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"pps_stddev_{interval}.png")
+        path = os.path.join(output_dir, f"pps_stddev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -356,7 +360,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"pps_maxdev_{interval}.png")
+        path = os.path.join(output_dir, f"pps_maxdev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -404,7 +408,7 @@ def plot_pps_accuracy(results, output_dir):
 
         fig.suptitle("PPS Accuracy: All Metrics and Intervals", fontsize=14, y=1.01)
         fig.tight_layout()
-        path = os.path.join(output_dir, "pps_accuracy_combined.png")
+        path = os.path.join(output_dir, "pps_accuracy_combined.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -451,7 +455,7 @@ def plot_load_impact(results, output_dir):
         ax.grid(True, alpha=0.3)
         ax.set_ylim(bottom=max(0, ax.get_ylim()[0]), top=101)
 
-        path = os.path.join(output_dir, f"{dns_service}_answer_rate.png")
+        path = os.path.join(output_dir, f"{dns_service}_answer_rate.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -490,13 +494,14 @@ def plot_load_impact(results, output_dir):
             ax.legend(loc="upper left", fontsize=8)
             ax.grid(True, alpha=0.3)
 
-            path = os.path.join(output_dir, f"{dns_service}_latency.png")
+            path = os.path.join(output_dir, f"{dns_service}_latency.pdf")
             fig.savefig(path, dpi=150, bbox_inches="tight")
             plt.close(fig)
 
         # --- Queries Sent vs Answers Received ---
-        fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+        fig, ax = plt.subplots(figsize=(12, 7))
 
+        all_sent = []
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
@@ -509,29 +514,146 @@ def plot_load_impact(results, output_dir):
                 sent_err.append(std_s)
                 comp_mean.append(mean_c)
                 comp_err.append(std_c)
-            axes[0].errorbar(x_vals, sent_mean, yerr=sent_err, markersize=4,
-                             capsize=3, linewidth=1.5, label=tool, **style)
-            axes[1].errorbar(x_vals, comp_mean, yerr=comp_err, markersize=4,
-                             capsize=3, linewidth=1.5, label=tool, **style)
+            ax.errorbar(sent_mean, comp_mean, xerr=sent_err, yerr=comp_err,
+                        markersize=4, capsize=3, linewidth=1.5, label=tool, **style)
+            all_sent.extend(sent_mean)
 
-        axes[0].set_xlabel("Target QPS")
-        axes[0].set_ylabel("Queries Sent")
-        axes[0].set_title(f"Queries Sent vs Target QPS — {dns_service}")
-        axes[0].legend(loc="upper left", fontsize=7)
-        axes[0].grid(True, alpha=0.3)
+        if all_sent:
+            lo, hi = min(all_sent), max(all_sent)
+            ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
-        axes[1].set_xlabel("Target QPS")
-        axes[1].set_ylabel("Answers Received")
-        axes[1].set_title(f"Answers Received vs Target QPS — {dns_service}")
-        axes[1].legend(loc="upper left", fontsize=7)
-        axes[1].grid(True, alpha=0.3)
+        ax.set_xlabel("Queries Sent")
+        ax.set_ylabel("Answers Received")
+        ax.set_title(f"Queries Sent vs Answers Received — {dns_service}")
+        ax.legend(loc="upper left", fontsize=7)
+        ax.grid(True, alpha=0.3)
 
-        path = os.path.join(output_dir, f"{dns_service}_qps_comparison.png")
+        path = os.path.join(output_dir, f"{dns_service}_qps_comparison.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
+    # --- Combined Grid: all DNS services x (answer_rate, latency, qps_comparison) ---
+    _plot_load_impact_grid(results, all_tools, output_dir)
+
     # --- 99.99% Threshold Summary Table ---
     _generate_threshold_summary(results, output_dir)
+
+
+def _plot_load_impact_grid(results, all_tools, output_dir):
+    """Combined grid chart: rows = DNS services, cols = answer_rate / latency / qps_comparison."""
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    n_rows = len(dns_services)
+    if n_rows == 0:
+        return
+
+    # Build per-service aggregated data once
+    service_data = {}
+    for dns_service in dns_services:
+        service_results = [r for r in results if r["dns_service"] == dns_service]
+        by_tool_qps = defaultdict(lambda: defaultdict(list))
+        for row in service_results:
+            by_tool_qps[row["tool"]][row["target_qps"]].append(row)
+        service_data[dns_service] = by_tool_qps
+
+    n_cols = 3
+    fig, axes = plt.subplots(
+        n_rows, n_cols,
+        figsize=(6 * n_cols, 4 * n_rows),
+        squeeze=False,
+    )
+    fig.suptitle("Load Generator Impact — All DNS Services", fontsize=14, fontweight="bold", y=1.01)
+
+    col_titles = ["Answer Rate (%)", "Average Latency (ms)", "Queries Sent vs Answers Received"]
+    for col, title in enumerate(col_titles):
+        axes[0][col].set_title(title, fontsize=11, fontweight="bold")
+
+    for row_idx, dns_service in enumerate(dns_services):
+        by_tool_qps = service_data[dns_service]
+        tools_here = sorted(by_tool_qps.keys())
+
+        # Row label on the leftmost axis
+        axes[row_idx][0].set_ylabel(f"{dns_service}\nAnswer Rate (%)", fontsize=9)
+
+        # --- Col 0: Answer Rate ---
+        ax = axes[row_idx][0]
+        for tool in tools_here:
+            style = _tool_style(tool, all_tools)
+            x_vals = sorted(by_tool_qps[tool].keys())
+            y_mean, y_err = [], []
+            for qps in x_vals:
+                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "answer_rate_pct")
+                y_mean.append(mean)
+                y_err.append(std)
+            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                        capsize=2, linewidth=1.2, label=tool, **style)
+        ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8)
+        ax.set_xlabel("Target QPS", fontsize=8)
+        ax.set_ylim(bottom=max(0, ax.get_ylim()[0]), top=101)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=7)
+        ax.legend(fontsize=6, loc="lower left")
+
+        # --- Col 1: Latency ---
+        ax = axes[row_idx][1]
+        latency_tools = {
+            tool for tool in by_tool_qps
+            if any(r.get("avg_latency_s") is not None
+                   for rows in by_tool_qps[tool].values() for r in rows)
+        }
+        if latency_tools:
+            for tool in sorted(latency_tools):
+                style = _tool_style(tool, all_tools)
+                x_vals = sorted(by_tool_qps[tool].keys())
+                y_mean, y_err = [], []
+                for qps in x_vals:
+                    rows = by_tool_qps[tool][qps]
+                    lats = [r["avg_latency_s"] * 1000 for r in rows
+                            if r.get("avg_latency_s") is not None]
+                    n = len(lats)
+                    mean = sum(lats) / n if n else 0
+                    std = math.sqrt(sum((v - mean) ** 2 for v in lats) / (n - 1)) if n > 1 else 0.0
+                    y_mean.append(mean)
+                    y_err.append(std)
+                ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                            capsize=2, linewidth=1.2, label=tool, **style)
+            ax.legend(fontsize=6, loc="upper left")
+        else:
+            ax.text(0.5, 0.5, "No latency data", ha="center", va="center",
+                    transform=ax.transAxes, fontsize=9, color="gray")
+        ax.set_xlabel("Target QPS", fontsize=8)
+        ax.set_ylabel("Avg Latency (ms)", fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=7)
+
+        # --- Col 2: Queries Sent vs Answers Received ---
+        ax = axes[row_idx][2]
+        all_sent_grid = []
+        for tool in tools_here:
+            style = _tool_style(tool, all_tools)
+            x_vals = sorted(by_tool_qps[tool].keys())
+            sent_mean, comp_mean = [], []
+            for qps in x_vals:
+                ms, _ = _trial_mean_std(by_tool_qps[tool][qps], "queries_sent")
+                mc, _ = _trial_mean_std(by_tool_qps[tool][qps], "queries_completed")
+                sent_mean.append(ms)
+                comp_mean.append(mc)
+            ax.plot(sent_mean, comp_mean, marker=style.get("marker"),
+                    color=style.get("color"), linestyle=style.get("linestyle", "-"),
+                    markersize=3, linewidth=1.2, label=tool)
+            all_sent_grid.extend(sent_mean)
+        if all_sent_grid:
+            lo, hi = min(all_sent_grid), max(all_sent_grid)
+            ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5, linewidth=0.8, label="Ideal")
+        ax.set_xlabel("Queries Sent", fontsize=8)
+        ax.set_ylabel("Answers Received", fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=7)
+        ax.legend(fontsize=6, loc="upper left")
+
+    fig.tight_layout()
+    path = os.path.join(output_dir, "all_services_grid.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
 def _generate_threshold_summary(results, output_dir):
