@@ -89,7 +89,7 @@ int xsk_socket_init(struct xsk_info *xsk, const char *ifname,
 	struct xsk_socket_config cfg = {
 		.rx_size = DEFAULT_RING_SIZE,
 		.tx_size = DEFAULT_RING_SIZE,
-		.xdp_flags = xdp_flags,
+		.xdp_flags = 0,
 		.bind_flags = bind_flags,
 		.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD,
 	};
@@ -98,11 +98,8 @@ int xsk_socket_init(struct xsk_info *xsk, const char *ifname,
 
 	int ret = xsk_socket__create(&xsk->xsk, ifname, queue_id,
 				     xsk->umem, &xsk->rx, &xsk->tx, &cfg);
-	if (ret) {
-		fprintf(stderr, "ERROR: xsk_socket__create queue %d failed: %s\n",
-			queue_id, strerror(-ret));
+	if (ret)
 		return -1;
-	}
 
 	return 0;
 }

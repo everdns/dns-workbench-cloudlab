@@ -399,9 +399,15 @@ int main(int argc, char **argv)
 					"falling back to copy mode\n", q);
 				bind_flags = XDP_COPY;
 				if (xsk_socket_init(&w->xsk, cfg.ifname, q,
-						    xdp_flags, bind_flags) < 0)
+						    xdp_flags, bind_flags) < 0) {
+					fprintf(stderr,
+						"ERROR: xsk_socket__create queue %d failed in copy mode\n",
+						q);
 					goto cleanup;
+				}
 			} else {
+				fprintf(stderr,
+					"ERROR: xsk_socket__create queue %d failed\n", q);
 				goto cleanup;
 			}
 		}
