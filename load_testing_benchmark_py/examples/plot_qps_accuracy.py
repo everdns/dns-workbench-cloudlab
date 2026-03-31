@@ -17,6 +17,7 @@ The raw data directory should contain a timestamps/ subdirectory with files like
 import argparse
 import csv
 import glob
+import json
 import logging
 import os
 import re
@@ -173,6 +174,23 @@ def main():
     if not results:
         log.error("No results to plot")
         sys.exit(1)
+
+    # When reading from raw files, export the computed results as CSV and JSON
+    if args.raw_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+
+        csv_out = os.path.join(args.output_dir, "qps_accuracy.csv")
+        fieldnames = list(results[0].keys())
+        with open(csv_out, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        log.info("Saved CSV to %s", csv_out)
+
+        json_out = os.path.join(args.output_dir, "qps_accuracy.json")
+        with open(json_out, "w") as f:
+            json.dump(results, f, indent=2)
+        log.info("Saved JSON to %s", json_out)
 
     tools_found = sorted(set(r["tool"] for r in results))
     intervals_found = sorted(set(r["interval"] for r in results if r["interval"] != "N/A"))
