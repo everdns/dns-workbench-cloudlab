@@ -14,6 +14,7 @@ A Python framework for benchmarking and comparing DNS load testing tools in a co
 | dns64perf++ | `dns64perf++` | Yes |
 | dns64perfpp-workbench | `dns64perfpp-workbench` | Yes |
 | kxdpgun | `kxdpgun` | No |
+| kxdpgun-dnsworkbench | `kxdpgun-dnsworkbench` | Yes |
 
 ## Setup
 
@@ -178,7 +179,8 @@ benchmark/
     ├── dnspyre_workbench.py
     ├── dns64perfpp.py
     ├── dns64perfpp_workbench.py
-    └── kxdpgun.py
+    ├── kxdpgun.py
+    └── kxdpgun_dnsworkbench.py
 ```
 
 Each tool adapter implements `build_command()` (generates the shell command for a given config and target QPS) and `parse_output()` (extracts structured metrics from stdout).
@@ -194,4 +196,5 @@ dnspyre-workbench
 dns64perf++
 dns64perfpp-workbench
 kxdpgun
+kxdpgun-dnsworkbench
 ```
