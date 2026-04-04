@@ -62,3 +62,4 @@ script3:
     dns64perf++: 3000000
     dns64perfpp-workbench: 3000000
     kxdpgun: 3000000
+    kxdpgun-dnsworkbench: 3000000
