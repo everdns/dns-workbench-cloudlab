@@ -107,15 +107,14 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
 
         # Parse outputs — RX QPS is computed by dns_responder via -T flag
         resp_result = parse_dns_responder_output(resp_text)
-        actual_qps = resp_result.rx_qps
         log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
-                 actual_qps, resp_result.actual_duration_secs)
+                 resp_result.rx_qps, resp_result.actual_duration_secs)
 
         row = {
             "tool": tool.name,
             "requested_qps": qps,
             "trial": trial,
-            "achieved_qps_responder": actual_qps,
+            "achieved_qps_responder": resp_result.rx_qps,
             "actual_duration_secs": resp_result.actual_duration_secs,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,

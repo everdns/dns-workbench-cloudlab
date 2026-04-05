@@ -137,8 +137,8 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
 
         # Parse tool output for logging
         tool_result = tool.parse_output(tool_stdout)
-        log.info("  Tool reported QPS: %.1f, Responder avg: %.1f pps",
-                 tool_result.achieved_qps, resp_result.avg_rx_pps)
+        log.info("  Tool reported QPS: %.1f, Responder reported: %.1f qps",
+                 tool_result.achieved_qps, resp_result.rx_qps)
 
         return rows
 
