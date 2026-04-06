@@ -136,6 +136,8 @@ def main():
     source.add_argument("--csv", help="Path to results CSV file")
     source.add_argument("--raw-dir", help="Directory containing raw/ and timestamps/ subdirectories")
     parser.add_argument("--output-dir", default="charts", help="Directory to save charts (default: charts/)")
+    parser.add_argument("--max-qps", type=int, default=None,
+                        help="Maximum requested QPS to include in charts")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -170,6 +172,13 @@ def main():
     if not results:
         log.error("No results to plot")
         sys.exit(1)
+
+    if args.max_qps is not None:
+        results = [r for r in results if r["requested_qps"] <= args.max_qps]
+        log.info("Filtered to %d rows with requested_qps <= %d", len(results), args.max_qps)
+        if not results:
+            log.error("No results remaining after filtering")
+            sys.exit(1)
 
     tools_found = sorted(set(r["tool"] for r in results))
     log.info("Tools: %s", tools_found)

@@ -152,6 +152,8 @@ def main():
                         help="Directory to save charts (default: charts/)")
     parser.add_argument("--crop", type=float, default=0,
                         help="Seconds to trim from start and end of timestamps before computing metrics (default: 0)")
+    parser.add_argument("--max-qps", type=int, default=None,
+                        help="Maximum target QPS to include in charts")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -191,6 +193,13 @@ def main():
         with open(json_out, "w") as f:
             json.dump(results, f, indent=2)
         log.info("Saved JSON to %s", json_out)
+
+    if args.max_qps is not None:
+        results = [r for r in results if r["target_qps"] <= args.max_qps]
+        log.info("Filtered to %d rows with target_qps <= %d", len(results), args.max_qps)
+        if not results:
+            log.error("No results remaining after filtering")
+            sys.exit(1)
 
     tools_found = sorted(set(r["tool"] for r in results))
     intervals_found = sorted(set(r["interval"] for r in results if r["interval"] != "N/A"))
