@@ -23,3 +23,6 @@ sudo git clone https://github.com/everdns/dns64perfpp-dnsworkbench.git /opt/dns6
 cd /opt/dns64perfpp && sudo git checkout original_feature/multiport
 cd /opt/dns64perfpp && sudo make CXXFLAGS+=" -DDNS64PERFPP_IPV4" && sudo make install
 sudo apt install -y knot-dnsutils
+sudo apt install -y build-essential pkg-config libgnutls28-dev liblmdb-dev libbpf-dev libmnl-dev libelf-dev
+sudo git clone https://github.com/everdns/kxdpgun-dnsworkbench.git /opt/kxdpgun-dnsworkbench
+cd /opt/kxdpgun-dnsworkbench && sudo autoreconf -if && sudo /opt/kxdpgun-dnsworkbench/configure && sudo make  && sudo make install
