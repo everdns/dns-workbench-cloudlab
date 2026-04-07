@@ -262,7 +262,7 @@ class ResultStore:
             return
         out_dir = self._ensure_dir(script)
         path = os.path.join(out_dir, filename)
-        keys = list(self.results[0].keys())
+        keys = list(dict.fromkeys(k for row in self.results for k in row))
         with open(path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=keys)
             writer.writeheader()
