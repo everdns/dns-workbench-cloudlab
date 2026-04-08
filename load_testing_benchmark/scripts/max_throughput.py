@@ -176,27 +176,21 @@ def main():
     log.info("Trials per QPS: %d", num_trials)
     log.info("Runtime: %ds, Pause: %ds", config["runtime"], config["pause_between_runs"])
 
-    for tool in tools:
-        log.info("--- Starting throughput discovery for %s ---", tool.name)
-        qps = start_qps
-        while qps <= max_qps:
-            for trial in range(1, num_trials + 1):
-                if num_trials > 1:
-                    log.info("Trial %d/%d for %s at %d QPS", trial, num_trials, tool.name, qps)
+    qps = start_qps
+    while qps <= max_qps:
+        for trial in range(1, num_trials + 1):
+            for tool in tools:
+                log.info("Trial %d/%d for %s at %d QPS", trial, num_trials, tool.name, qps)
                 try:
                     run_single_test(config, tool, qps, store, script_name, trial=trial)
                 except Exception as e:
                     log.error("Unhandled error for %s at %d QPS trial %d: %s", tool.name, qps, trial, e)
 
-                if trial < num_trials and not config.get("dry_run"):
+                if not config.get("dry_run"):
                     log.info("Pausing %ds before next trial...", config["pause_between_runs"])
                     time.sleep(config["pause_between_runs"])
-
-            qps += qps_step
-
-            if qps <= max_qps and not config.get("dry_run"):
-                log.info("Pausing %ds before next run...", config["pause_between_runs"])
-                time.sleep(config["pause_between_runs"])
+                    
+        qps += qps_step
 
     # Export results
     csv_path = store.export_csv(script_name)
