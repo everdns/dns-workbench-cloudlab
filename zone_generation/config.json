@@ -1,9 +1,9 @@
 {
     "sld": "workbench.lan",
     "base_subnet": "10.0.0.0",
-    "num_records": 16777216,
-    "max_records_per_file": 16777216,
-    "num_ips": 16777216,
+    "num_records": 65536,
+    "max_records_per_file": 65536,
+    "num_ips": 65536,
     "out_dir": "output",
     "record_weights": {
         "A": 610,
