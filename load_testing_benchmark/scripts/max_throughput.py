@@ -130,6 +130,8 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
             row["tool_queries_completed"] = tool_result.queries_completed
             row["tool_queries_lost"] = tool_result.queries_lost
             row["avg_latency_s"] = tool_result.avg_latency
+            row["queries_not_received_dns_responder"] = tool_result.queries_sent - resp_result.rx_total
+            row["queries_not_received_tool"] = resp_result.tx_total - tool_result.queries_completed
         except Exception:
             if not tool_timed_out:
                 raise
@@ -189,7 +191,7 @@ def main():
                 if not config.get("dry_run"):
                     log.info("Pausing %ds before next trial...", config["pause_between_runs"])
                     time.sleep(config["pause_between_runs"])
-                    
+
         qps += qps_step
 
     # Export results

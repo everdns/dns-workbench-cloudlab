@@ -122,6 +122,8 @@ def load_from_raw_dir(results_dir):
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,
+            "queries_not_received_dns_responder": tool_result.queries_sent - resp_result.rx_total,
+            "queries_not_received_tool": resp_result.tx_total - tool_result.queries_completed,
         }
         results.append(row)
 
