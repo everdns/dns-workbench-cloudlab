@@ -39,7 +39,7 @@ if command -v named &>/dev/null; then
         [ -f "$part" ] && sudo cp "$part" "$BIND_DIR/$(basename "$part")"
     done
 
-    if ! grep -q "zone \"$ZONE_NAME\"" "$BIND_CONF" 2>/dev/null; then
+    if ! sudo grep -q "zone \"$ZONE_NAME\"" "$BIND_CONF" 2>/dev/null; then
         echo "  Adding zone entry to $BIND_CONF"
         printf '\nzone "%s" IN {\n    type master;\n    file "%s/%s";\n};\n' \
             "$ZONE_NAME" "$BIND_DIR" "$ZONE_FILENAME" | sudo tee -a "$BIND_CONF" >/dev/null
@@ -62,7 +62,7 @@ if command -v knotd &>/dev/null; then
         [ -f "$part" ] && sudo cp "$part" "$KNOT_DIR/$(basename "$part")"
     done
 
-    if ! grep -q "domain: $ZONE_NAME" "$KNOT_CONF" 2>/dev/null; then
+    if ! sudo grep -q "domain: $ZONE_NAME" "$KNOT_CONF" 2>/dev/null; then
         echo "  Adding zone entry to $KNOT_CONF"
         printf '  - domain: %s\n    file: "%s/%s"\n' \
             "$ZONE_NAME" "$KNOT_DIR" "$ZONE_FILENAME" | sudo tee -a "$KNOT_CONF" >/dev/null
@@ -85,7 +85,7 @@ if command -v pdns_server &>/dev/null; then
         [ -f "$part" ] && sudo cp "$part" "$PDNS_DIR/$(basename "$part")"
     done
 
-    if ! grep -q "zone \"$ZONE_NAME\"" "$PDNS_CONF" 2>/dev/null; then
+    if ! sudo grep -q "zone \"$ZONE_NAME\"" "$PDNS_CONF" 2>/dev/null; then
         echo "  Adding zone entry to $PDNS_CONF"
         printf '\nzone "%s" {\n    type master;\n    file "%s/%s";\n};\n' \
             "$ZONE_NAME" "$PDNS_DIR" "$ZONE_FILENAME" | sudo tee -a "$PDNS_CONF" >/dev/null
@@ -108,7 +108,7 @@ if command -v nsd &>/dev/null; then
         [ -f "$part" ] && sudo cp "$part" "$NSD_DIR/$(basename "$part")"
     done
 
-    if ! grep -q "name: \"$ZONE_NAME\"" "$NSD_CONF" 2>/dev/null; then
+    if ! sudo grep -q "name: \"$ZONE_NAME\"" "$NSD_CONF" 2>/dev/null; then
         echo "  Adding zone entry to $NSD_CONF"
         printf '\nzone:\n\tname: "%s"\n\tzonefile: "%s"\n' \
             "$ZONE_NAME" "$ZONE_FILENAME" | sudo tee -a "$NSD_CONF" >/dev/null
@@ -131,7 +131,7 @@ if command -v unbound &>/dev/null; then
         [ -f "$part" ] && sudo cp "$part" "$UNBOUND_DIR/$(basename "$part")"
     done
 
-    if ! grep -q "name: \"$ZONE_NAME\"" "$UNBOUND_CONF" 2>/dev/null; then
+    if ! sudo grep -q "name: \"$ZONE_NAME\"" "$UNBOUND_CONF" 2>/dev/null; then
         echo "  Adding zone entry to $UNBOUND_CONF"
         printf '\nauth-zone:\n\tname: "%s"\n\tzonefile: "%s/%s"\n' \
             "$ZONE_NAME" "$UNBOUND_DIR" "$ZONE_FILENAME" | sudo tee -a "$UNBOUND_CONF" >/dev/null
