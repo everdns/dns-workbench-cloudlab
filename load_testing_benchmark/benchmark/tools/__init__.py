@@ -9,12 +9,12 @@ from benchmark.tools.kxdpgun_dnsworkbench import KxdpgunWorkbench
 
 TOOL_REGISTRY = {
     "dnsperf": Dnsperf,
-    "dnsperf-workbench-slice": DnsperfWorkbenchSlice,
-    "dnsperf-workbench-lencse": DnsperfWorkbenchLencse,
+    "dnsperf-dnsworkbench-slice": DnsperfWorkbenchSlice,
+    "dnsperf-dnsworkbench-lencse": DnsperfWorkbenchLencse,
     "dnspyre": Dnspyre,
-    "dnspyre-workbench": DnspyreWorkbench,
+    "dnspyre-dnsworkbench": DnspyreWorkbench,
     "dns64perf++": Dns64PerfPP,
-    "dns64perfpp-workbench": Dns64PerfPPWorkbench,
+    "dns64perfpp-dnsworkbench": Dns64PerfPPWorkbench,
     "kxdpgun": Kxdpgun,
     "kxdpgun-dnsworkbench": KxdpgunWorkbench,
 }

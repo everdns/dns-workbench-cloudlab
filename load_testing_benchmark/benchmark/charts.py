@@ -9,6 +9,22 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# Raise default font sizes for all charts (applies to any axis label, title,
+# or tick that doesn't specify fontsize explicitly).
+plt.rcParams.update({
+    "font.size":         18,
+    "font.weight":       "bold",
+    "axes.titlesize":    18,
+    "axes.titleweight":  "bold",
+    "axes.labelsize":    18,
+    "axes.labelweight":  "bold",
+    "xtick.labelsize":   18,
+    "ytick.labelsize":   18,
+    "legend.fontsize":   18,
+    "figure.titlesize":  18,
+    "figure.titleweight": "bold",
+})
+
 log = logging.getLogger(__name__)
 
 
@@ -26,10 +42,22 @@ def _interval_sort_key(label):
 
 LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2)), (0, (1, 1)), (0, (3, 5, 1, 5)), (0, (5, 1))]
 MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*", "h"]
+# Palette chosen so that consecutive indices have very different luminance.
+# Combined with the distinct LINE_STYLES and MARKERS above, lines remain
+# distinguishable when the figure is printed or photocopied in greyscale.
 COLORS = [
-    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-    "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
-    "#bcbd22", "#17becf", "#aec7e8", "#ffbb78",
+    "#000000",  # 0  black           (L~0)
+    "#FFB000",  # 1  gold            (L~75)
+    "#648FFF",  # 2  blue            (L~42)
+    "#DC267F",  # 3  magenta         (L~30)
+    "#FE6100",  # 4  orange          (L~55)
+    "#785EF0",  # 5  purple          (L~30)
+    "#009E73",  # 6  teal-green      (L~51)
+    "#B0B0B0",  # 7  light grey      (L~68)
+    "#6B3D00",  # 8  brown           (L~22)
+    "#56B4E9",  # 9  sky blue        (L~65)
+    "#F0E442",  # 10 yellow          (L~87)
+    "#4D4D4D",  # 11 dark grey       (L~30)
 ]
 
 # Load fixed tool style registry from chart_config.yaml
@@ -96,7 +124,7 @@ def plot_max_throughput(results, output_dir):
 
     all_tools = sorted(by_tool_qps.keys())
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(12, 12))
 
     for tool in all_tools:
         style = _tool_style(tool, all_tools)
@@ -117,9 +145,9 @@ def plot_max_throughput(results, output_dir):
         ax.plot([min_val, max_val], [min_val, max_val], "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
     ax.set_xlabel("Requested QPS")
-    ax.set_ylabel("Achieved QPS (dns_responder)")
-    ax.set_title("Maximum Throughput: Requested vs Achieved QPS")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.set_ylabel("Achieved QPS")
+    #ax.set_title("Maximum Throughput: Requested vs Achieved QPS")
+    ax.legend(loc="upper left")
     ax.grid(True, alpha=0.3)
 
     path = os.path.join(output_dir, "requested_vs_achieved.pdf")
@@ -167,7 +195,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"Mean Achieved QPS ({interval} intervals)")
         ax.set_title(f"QPS Accuracy: Mean Achieved vs Target ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_mean_{interval}.pdf")
@@ -190,7 +218,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"QPS Standard Deviation ({interval} intervals)")
         ax.set_title(f"QPS Accuracy: Standard Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_stddev_{interval}.pdf")
@@ -213,7 +241,7 @@ def plot_qps_accuracy(results, output_dir):
         ax.set_xlabel("Target QPS")
         ax.set_ylabel(f"Max Deviation from Target ({interval} intervals)")
         ax.set_title(f"QPS Accuracy: Maximum Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_maxdev_{interval}.pdf")
@@ -259,10 +287,10 @@ def plot_qps_accuracy(results, output_dir):
                 ax.set_xlabel("Target QPS")
                 ax.set_ylabel(f"{ylabel} ({interval})")
                 ax.set_title(f"{ylabel} ({interval})")
-                ax.legend(loc="best", fontsize=6)
+                ax.legend(loc="best", fontsize=9)
                 ax.grid(True, alpha=0.3)
 
-        fig.suptitle("QPS Accuracy: All Metrics and Intervals", fontsize=14, y=1.01)
+        fig.suptitle("QPS Accuracy: All Metrics and Intervals", fontsize=18, y=1.01)
         fig.tight_layout()
         path = os.path.join(output_dir, "qps_accuracy_combined.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -311,7 +339,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
         ax.set_ylabel(f"Mean Packet Count ({interval} intervals)")
         ax.set_title(f"Packet Count Accuracy: Mean Achieved vs Expected ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_mean_{interval}.pdf")
@@ -334,7 +362,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
         ax.set_ylabel(f"Packet Count Standard Deviation ({interval} intervals)")
         ax.set_title(f"Packet Count Accuracy: Standard Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_stddev_{interval}.pdf")
@@ -357,7 +385,7 @@ def plot_pps_accuracy(results, output_dir):
         ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
         ax.set_ylabel(f"Max Packet Count Deviation from Expected ({interval} intervals)")
         ax.set_title(f"Packet Count Accuracy: Maximum Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=11)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_maxdev_{interval}.pdf")
@@ -403,10 +431,10 @@ def plot_pps_accuracy(results, output_dir):
                 ax.set_xlabel(f"Expected Packet Count ({interval})")
                 ax.set_ylabel(f"{ylabel} ({interval})")
                 ax.set_title(f"{ylabel} ({interval})")
-                ax.legend(loc="best", fontsize=6)
+                ax.legend(loc="best", fontsize=9)
                 ax.grid(True, alpha=0.3)
 
-        fig.suptitle("PPS Accuracy: All Metrics and Intervals", fontsize=14, y=1.01)
+        fig.suptitle("PPS Accuracy: All Metrics and Intervals", fontsize=18, y=1.01)
         fig.tight_layout()
         path = os.path.join(output_dir, "pps_accuracy_combined.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -451,7 +479,7 @@ def plot_load_impact(results, output_dir):
         ax.set_xlabel("Target QPS")
         ax.set_ylabel("Answer Rate (%)")
         ax.set_title(f"Answer Rate vs QPS — {dns_service}")
-        ax.legend(loc="lower left", fontsize=8)
+        ax.legend(loc="lower left", fontsize=11)
         ax.grid(True, alpha=0.3)
         ax.set_ylim(bottom=max(0, ax.get_ylim()[0]), top=101)
 
@@ -491,7 +519,7 @@ def plot_load_impact(results, output_dir):
             ax.set_xlabel("Target QPS")
             ax.set_ylabel("Average Latency (ms)")
             ax.set_title(f"Average Latency vs QPS — {dns_service}")
-            ax.legend(loc="upper left", fontsize=8)
+            ax.legend(loc="upper left", fontsize=11)
             ax.grid(True, alpha=0.3)
 
             path = os.path.join(output_dir, f"{dns_service}_latency.pdf")
@@ -525,7 +553,7 @@ def plot_load_impact(results, output_dir):
         ax.set_xlabel("Queries Sent")
         ax.set_ylabel("Answers Received")
         ax.set_title(f"Queries Sent vs Answers Received — {dns_service}")
-        ax.legend(loc="upper left", fontsize=7)
+        ax.legend(loc="upper left", fontsize=10)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"{dns_service}_qps_comparison.pdf")
@@ -561,18 +589,18 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
         figsize=(6 * n_cols, 4 * n_rows),
         squeeze=False,
     )
-    fig.suptitle("Load Generator Impact — All DNS Services", fontsize=14, fontweight="bold", y=1.01)
+    fig.suptitle("Load Generator Impact — All DNS Services", fontsize=18, fontweight="bold", y=1.01)
 
     col_titles = ["Answer Rate (%)", "Average Latency (ms)", "Queries Sent vs Answers Received"]
     for col, title in enumerate(col_titles):
-        axes[0][col].set_title(title, fontsize=11, fontweight="bold")
+        axes[0][col].set_title(title, fontsize=18, fontweight="bold")
 
     for row_idx, dns_service in enumerate(dns_services):
         by_tool_qps = service_data[dns_service]
         tools_here = sorted(by_tool_qps.keys())
 
         # Row label on the leftmost axis
-        axes[row_idx][0].set_ylabel(f"{dns_service}\nAnswer Rate (%)", fontsize=9)
+        axes[row_idx][0].set_ylabel(f"{dns_service}\nAnswer Rate (%)", fontsize=12)
 
         # --- Col 0: Answer Rate ---
         ax = axes[row_idx][0]
@@ -587,11 +615,11 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
             ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
                         capsize=2, linewidth=1.2, label=tool, **style)
         ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8)
-        ax.set_xlabel("Target QPS", fontsize=8)
+        ax.set_xlabel("Target QPS", fontsize=11)
         ax.set_ylim(bottom=max(0, ax.get_ylim()[0]), top=101)
         ax.grid(True, alpha=0.3)
-        ax.tick_params(labelsize=7)
-        ax.legend(fontsize=6, loc="lower left")
+        ax.tick_params(labelsize=10)
+        ax.legend(fontsize=9, loc="lower left")
 
         # --- Col 1: Latency ---
         ax = axes[row_idx][1]
@@ -616,14 +644,14 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
                     y_err.append(std)
                 ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
                             capsize=2, linewidth=1.2, label=tool, **style)
-            ax.legend(fontsize=6, loc="upper left")
+            ax.legend(fontsize=9, loc="upper left")
         else:
             ax.text(0.5, 0.5, "No latency data", ha="center", va="center",
-                    transform=ax.transAxes, fontsize=9, color="gray")
-        ax.set_xlabel("Target QPS", fontsize=8)
-        ax.set_ylabel("Avg Latency (ms)", fontsize=8)
+                    transform=ax.transAxes, fontsize=12, color="gray")
+        ax.set_xlabel("Target QPS", fontsize=11)
+        ax.set_ylabel("Avg Latency (ms)", fontsize=11)
         ax.grid(True, alpha=0.3)
-        ax.tick_params(labelsize=7)
+        ax.tick_params(labelsize=10)
 
         # --- Col 2: Queries Sent vs Answers Received ---
         ax = axes[row_idx][2]
@@ -644,11 +672,11 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
         if all_sent_grid:
             lo, hi = min(all_sent_grid), max(all_sent_grid)
             ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5, linewidth=0.8, label="Ideal")
-        ax.set_xlabel("Queries Sent", fontsize=8)
-        ax.set_ylabel("Answers Received", fontsize=8)
+        ax.set_xlabel("Queries Sent", fontsize=11)
+        ax.set_ylabel("Answers Received", fontsize=11)
         ax.grid(True, alpha=0.3)
-        ax.tick_params(labelsize=7)
-        ax.legend(fontsize=6, loc="upper left")
+        ax.tick_params(labelsize=10)
+        ax.legend(fontsize=9, loc="upper left")
 
     fig.tight_layout()
     path = os.path.join(output_dir, "all_services_grid.pdf")

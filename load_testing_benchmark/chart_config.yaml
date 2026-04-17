@@ -5,11 +5,11 @@
 
 tool_styles:
   dnsperf: 0
-  dnsperf-workbench-slice: 1
-  dnsperf-workbench-lencse: 2
+  dnsperf-dnsworkbench-slice: 1
+  dnsperf-dnsworkbench-lencse: 2
   dnspyre: 3
-  dnspyre-workbench: 4
+  dnspyre-dnsworkbench: 4
   dns64perf++: 5
-  dns64perfpp-workbench: 6
+  dns64perfpp-dnsworkbench: 6
   kxdpgun: 7
   kxdpgun-dnsworkbench: 8

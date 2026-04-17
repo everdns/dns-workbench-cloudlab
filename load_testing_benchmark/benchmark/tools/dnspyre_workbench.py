@@ -6,7 +6,7 @@ from benchmark.tools.dnspyre import _parse_latency
 
 
 class DnspyreWorkbench(Tool):
-    name = "dnspyre-workbench"
+    name = "dnspyre-dnsworkbench"
     reports_latency = True
 
     def build_command(self, config, qps):

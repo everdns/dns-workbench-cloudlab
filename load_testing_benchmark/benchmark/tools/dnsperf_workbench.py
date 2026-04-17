@@ -66,10 +66,10 @@ class _DnsperfWorkbenchBase(Tool):
 
 
 class DnsperfWorkbenchSlice(_DnsperfWorkbenchBase):
-    name = "dnsperf-workbench-slice"
+    name = "dnsperf-dnsworkbench-slice"
     _rate_limiter = "slice"
 
 
 class DnsperfWorkbenchLencse(_DnsperfWorkbenchBase):
-    name = "dnsperf-workbench-lencse"
+    name = "dnsperf-dnsworkbench-lencse"
     _rate_limiter = "lencse"

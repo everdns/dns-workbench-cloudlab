@@ -6,7 +6,7 @@ from benchmark.tools.dns64perfpp import compute_burst_params
 
 
 class Dns64PerfPPWorkbench(Tool):
-    name = "dns64perfpp-workbench"
+    name = "dns64perfpp-dnsworkbench"
     reports_latency = True
 
     def validate_params(self, config, qps):
