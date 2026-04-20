@@ -5,7 +5,7 @@ from benchmark.tools.base import Tool
 
 
 class _DnsperfWorkbenchBase(Tool):
-    """Shared logic for dnsperf-workbench slice and lencse variants."""
+    """Shared logic for dnsperf-dnsworkbench slice and lencse variants."""
 
     reports_latency = True
     _rate_limiter = ""  # Override in subclasses

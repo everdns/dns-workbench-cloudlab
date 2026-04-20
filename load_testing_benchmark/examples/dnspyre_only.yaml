@@ -25,7 +25,7 @@ dns_services:
 
 tools:
   - dnspyre
-  - dnspyre-workbench
+  - dnspyre-dnsworkbench
 
 dnspyre_workers: 40
 timeout: 1

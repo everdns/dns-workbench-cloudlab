@@ -37,10 +37,10 @@ max_delay_between_bursts: 10000000
 
 tools:
   - dnsperf
-  - dnsperf-workbench-slice
-  - dnsperf-workbench-lencse
-  - dnspyre-workbench
-  - dns64perfpp-workbench
+  - dnsperf-dnsworkbench-slice
+  - dnsperf-dnsworkbench-lencse
+  - dnspyre-dnsworkbench
+  - dns64perfpp-dnsworkbench
   - kxdpgun
   - kxdpgun-dnsworkbench
 
@@ -64,11 +64,11 @@ script3:
   # Optional per-tool max QPS overrides (falls back to max_qps above)
   tool_max_qps:
     dnsperf: 1500000
-    dnsperf-workbench-slice: 1500000
-    dnsperf-workbench-lencse: 1500000
+    dnsperf-dnsworkbench-slice: 1500000
+    dnsperf-dnsworkbench-lencse: 1500000
     dnspyre: 300000
-    dnspyre-workbench: 300000
+    dnspyre-dnsworkbench: 300000
     dns64perf++: 3000000
-    dns64perfpp-workbench: 3000000
+    dns64perfpp-dnsworkbench: 3000000
     kxdpgun: 3000000
     kxdpgun-dnsworkbench: 3000000

@@ -21,7 +21,7 @@ import sys
 import tempfile
 
 RENAMES = {
-    "dns64perfpp-workbench": "dns64perfpp-dnsworkbench",
+    "dns64perfpp-dnsworkbench": "dns64perfpp-dnsworkbench",
     "dnsperf-workbench-slice": "dnsperf-dnsworkbench-slice",
     "dnsperf-workbench-lencse": "dnsperf-dnsworkbench-lencse",
     "dnspyre-workbench": "dnspyre-dnsworkbench",

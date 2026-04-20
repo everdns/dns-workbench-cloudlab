@@ -7,12 +7,12 @@ A Python framework for benchmarking and comparing DNS load testing tools in a co
 | Tool | Binary | Reports Latency |
 |------|--------|-----------------|
 | dnsperf | `dnsperf` | Yes |
-| dnsperf-workbench (slice) | `dnsperf-workbench` | Yes |
-| dnsperf-workbench (lencse) | `dnsperf-workbench` | Yes |
+| dnsperf-dnsworkbench (slice) | `dnsperf-dnsworkbench` | Yes |
+| dnsperf-dnsworkbench (lencse) | `dnsperf-dnsworkbench` | Yes |
 | dnspyre | `dnspyre` | Yes |
-| dnspyre-workbench | `dnspyre-dnsworkbench` | Yes |
+| dnspyre-dnsworkbench | `dnspyre-dnsworkbench` | Yes |
 | dns64perf++ | `dns64perf++` | Yes |
-| dns64perfpp-workbench | `dns64perfpp-workbench` | Yes |
+| dns64perfpp-dnsworkbench | `dns64perfpp-dnsworkbench` | Yes |
 | kxdpgun | `kxdpgun` | No |
 | kxdpgun-dnsworkbench | `kxdpgun-dnsworkbench` | Yes |
 
@@ -189,12 +189,12 @@ Each tool adapter implements `build_command()` (generates the shell command for 
 
 ```
 dnsperf
-dnsperf-workbench-slice
-dnsperf-workbench-lencse
+dnsperf-dnsworkbench-slice
+dnsperf-dnsworkbench-lencse
 dnspyre
 dnspyre-workbench
 dns64perf++
-dns64perfpp-workbench
+dns64perfpp-dnsworkbench
 kxdpgun
 kxdpgun-dnsworkbench
 ```
