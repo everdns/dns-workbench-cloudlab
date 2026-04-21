@@ -20,7 +20,13 @@ from benchmark.config import (
     apply_script3_overrides,
     load_config,
 )
-from benchmark.dns_servers import start_dns_service, stop_dns_service, wait_for_dns_ready
+from benchmark.dns_servers import (
+    clear_dns_cache,
+    ensure_dns_running,
+    start_dns_service,
+    stop_dns_service,
+    wait_for_dns_ready,
+)
 from benchmark.remote import ssh_run
 from benchmark.results import ResultStore
 from benchmark.tools import get_tools
@@ -124,6 +130,7 @@ def main():
     qps_step = s3["qps_step"]
     trials = s3["trials"]
     tool_max_qps = s3.get("tool_max_qps", {})
+    clear_cache = bool(s3.get("clear_cache", False))
 
     services = config["dns_services"]["services"]
     if args.dns_services:
@@ -141,6 +148,8 @@ def main():
              min_qps, max_qps, qps_step, trials)
     if tool_max_qps:
         log.info("Per-tool max QPS overrides: %s", tool_max_qps)
+    if clear_cache:
+        log.info("Cache clearing enabled: will clear before each tool run")
 
     for dns_service in services:
         log.info("=== Testing DNS service: %s ===", dns_service)
@@ -170,6 +179,18 @@ def main():
                             log.debug("Skipping %s at %d QPS (max for tool: %d)",
                                       tool.name, qps, tool_limit)
                             continue
+
+                        if clear_cache and not config.get("dry_run"):
+                            try:
+                                clear_dns_cache(config, dns_service)
+                                ensure_dns_running(config, dns_service, timeout=30)
+                            except Exception as e:
+                                log.error(
+                                    "Cache clear/ready failed for %s: %s. Skipping run.",
+                                    dns_service, e,
+                                )
+                                continue
+
                         try:
                             run_impact_test(
                                 config, tool, dns_service, qps, trial,

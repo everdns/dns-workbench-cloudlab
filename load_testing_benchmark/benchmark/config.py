@@ -99,6 +99,19 @@ def add_script3_args(parser):
     parser.add_argument("--impact-qps-step", type=int, help="QPS step for impact test")
     parser.add_argument("--impact-trials", type=int, help="Number of trials per test")
     parser.add_argument("--dns-services", nargs="+", help="DNS services to test")
+    parser.add_argument(
+        "--clear-cache",
+        dest="clear_cache",
+        action="store_true",
+        default=None,
+        help="Clear the resolver cache before each tool run (resolvers only)",
+    )
+    parser.add_argument(
+        "--no-clear-cache",
+        dest="clear_cache",
+        action="store_false",
+        help="Disable per-run cache clearing",
+    )
 
 
 def apply_script1_overrides(config, args):
@@ -144,4 +157,6 @@ def apply_script3_overrides(config, args):
         s3["trials"] = args.impact_trials
     if args.dns_services is not None:
         config.setdefault("dns_services", {})["services"] = args.dns_services
+    if getattr(args, "clear_cache", None) is not None:
+        s3["clear_cache"] = args.clear_cache
     return config

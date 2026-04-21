@@ -45,6 +45,42 @@ def stop_dns_service(config, service_name=None):
         log.warning("Stop command returned non-zero: %s", result.stderr)
 
 
+def clear_dns_cache(config, service_name):
+    """Clear the DNS resolver cache on the server host.
+
+    Some underlying clear-cache scripts (e.g. unbound, pdns-recursor) restart
+    the service, so callers should verify readiness afterwards.
+    """
+    server = config["hosts"]["server"]
+    clear_script = config["dns_services"].get("clear_cache_script")
+    if not clear_script:
+        raise RuntimeError(
+            "dns_services.clear_cache_script not configured"
+        )
+
+    log.info("Clearing cache for '%s' on %s", service_name, server)
+    result = ssh_run(server, f"{clear_script} {service_name}", timeout=30)
+    if result.returncode != 0:
+        log.warning(
+            "Clear cache for %s returned rc=%d: %s",
+            service_name, result.returncode, result.stderr.strip(),
+        )
+
+
+def ensure_dns_running(config, service_name, timeout=30):
+    """Ensure the DNS service is up; (re)start it if it is not responding."""
+    try:
+        wait_for_dns_ready(config, timeout=timeout)
+        return
+    except TimeoutError:
+        log.warning(
+            "DNS service '%s' not responding after cache clear; restarting",
+            service_name,
+        )
+    start_dns_service(config, service_name)
+    wait_for_dns_ready(config, timeout=timeout)
+
+
 def wait_for_dns_ready(config, timeout=30):
     """Poll until the DNS server on the resolver IP responds to queries.
 
