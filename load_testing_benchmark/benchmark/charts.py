@@ -176,7 +176,7 @@ def plot_qps_accuracy(results, output_dir):
             by_tool_qps[row["tool"]][row["target_qps"]].append(row)
 
         # --- Mean QPS chart ---
-        fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(12, 12))
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
@@ -193,9 +193,9 @@ def plot_qps_accuracy(results, output_dir):
                     "--", color="gray", alpha=0.5, label="Ideal")
 
         ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"Mean Achieved QPS ({interval} intervals)")
-        ax.set_title(f"QPS Accuracy: Mean Achieved vs Target ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.set_ylabel(f"Mean Achieved QPS")
+        #ax.set_title(f"QPS Accuracy: Mean Achieved vs Target ({interval})")
+        ax.legend(loc="upper left", fontsize=16)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_mean_{interval}.pdf")
@@ -203,7 +203,7 @@ def plot_qps_accuracy(results, output_dir):
         plt.close(fig)
 
         # --- StdDev chart ---
-        fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(12, 10))
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
@@ -216,9 +216,9 @@ def plot_qps_accuracy(results, output_dir):
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"QPS Standard Deviation ({interval} intervals)")
-        ax.set_title(f"QPS Accuracy: Standard Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.set_ylabel(f"QPS Standard Deviation")
+        #ax.set_title(f"QPS Accuracy: Standard Deviation ({interval})")
+        ax.legend(loc="upper left", fontsize=18)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_stddev_{interval}.pdf")
@@ -226,7 +226,7 @@ def plot_qps_accuracy(results, output_dir):
         plt.close(fig)
 
         # --- Max Deviation chart ---
-        fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(12, 12))
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
@@ -239,9 +239,9 @@ def plot_qps_accuracy(results, output_dir):
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"Max Deviation from Target ({interval} intervals)")
-        ax.set_title(f"QPS Accuracy: Maximum Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.set_ylabel(f"Max Deviation from Target")
+        #ax.set_title(f"QPS Accuracy: Maximum Deviation ({interval})")
+        ax.legend(loc="upper left", fontsize=14, frameon=False)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"accuracy_maxdev_{interval}.pdf")
@@ -336,10 +336,10 @@ def plot_pps_accuracy(results, output_dir):
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
                     "--", color="gray", alpha=0.5, label="Ideal (y=x)")
 
-        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
-        ax.set_ylabel(f"Mean Packet Count ({interval} intervals)")
+        ax.set_xlabel(f"Expected Packet Count")
+        ax.set_ylabel(f"Mean Packet Count")
         ax.set_title(f"Packet Count Accuracy: Mean Achieved vs Expected ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.legend(loc="upper left", fontsize=16)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_mean_{interval}.pdf")
@@ -359,10 +359,10 @@ def plot_pps_accuracy(results, output_dir):
             ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
-        ax.set_ylabel(f"Packet Count Standard Deviation ({interval} intervals)")
+        ax.set_xlabel(f"Expected Packet Count")
+        ax.set_ylabel(f"Packet Count Standard Deviation")
         ax.set_title(f"Packet Count Accuracy: Standard Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.legend(loc="upper left", fontsize=16)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_stddev_{interval}.pdf")
@@ -382,10 +382,10 @@ def plot_pps_accuracy(results, output_dir):
             ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel(f"Expected Packet Count ({interval} intervals)")
-        ax.set_ylabel(f"Max Packet Count Deviation from Expected ({interval} intervals)")
+        ax.set_xlabel(f"Expected Packet Count")
+        ax.set_ylabel(f"Max Packet Count Deviation from Expected")
         ax.set_title(f"Packet Count Accuracy: Maximum Deviation ({interval})")
-        ax.legend(loc="upper left", fontsize=11)
+        ax.legend(loc="upper left", fontsize=16)
         ax.grid(True, alpha=0.3)
 
         path = os.path.join(output_dir, f"pps_maxdev_{interval}.pdf")
@@ -519,7 +519,7 @@ def plot_load_impact(results, output_dir):
             ax.set_xlabel("Target QPS")
             ax.set_ylabel("Average Latency (ms)")
             ax.set_title(f"Average Latency vs QPS — {dns_service}")
-            ax.legend(loc="upper left", fontsize=11)
+            ax.legend(loc="upper left", fontsize=16)
             ax.grid(True, alpha=0.3)
 
             path = os.path.join(output_dir, f"{dns_service}_latency.pdf")
@@ -589,7 +589,7 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
         figsize=(6 * n_cols, 4 * n_rows),
         squeeze=False,
     )
-    fig.suptitle("Load Generator Impact — All DNS Services", fontsize=18, fontweight="bold", y=1.01)
+    #fig.suptitle("Load Generator Impact — All DNS Services", fontsize=18, fontweight="bold", y=1.01)
 
     col_titles = ["Answer Rate (%)", "Average Latency (ms)", "Queries Sent vs Answers Received"]
     for col, title in enumerate(col_titles):
