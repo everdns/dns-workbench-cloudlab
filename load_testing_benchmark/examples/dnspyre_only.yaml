@@ -16,6 +16,7 @@ dns_responder:
 dns_services:
   start_script: /local/repository/start_dns_service.sh
   stop_script: /local/repository/stop_dns_service.sh
+  clear_cache_script: /local/repository/clear_cache.sh
   services:
     - bind-resolver
     - powerdns-resolver
