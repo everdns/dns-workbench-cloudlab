@@ -112,6 +112,19 @@ def add_script3_args(parser):
         action="store_false",
         help="Disable per-run cache clearing",
     )
+    parser.add_argument(
+        "--warmup-cache",
+        dest="warmup_cache",
+        action="store_true",
+        default=None,
+        help="Pre-populate resolver cache with one dnsperf pass through the input file (ignored if --clear-cache is set)",
+    )
+    parser.add_argument(
+        "--no-warmup-cache",
+        dest="warmup_cache",
+        action="store_false",
+        help="Disable cache warmup",
+    )
 
 
 def apply_script1_overrides(config, args):
@@ -159,4 +172,6 @@ def apply_script3_overrides(config, args):
         config.setdefault("dns_services", {})["services"] = args.dns_services
     if getattr(args, "clear_cache", None) is not None:
         s3["clear_cache"] = args.clear_cache
+    if getattr(args, "warmup_cache", None) is not None:
+        s3["warmup_cache"] = args.warmup_cache
     return config

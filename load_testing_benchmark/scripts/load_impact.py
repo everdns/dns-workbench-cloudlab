@@ -26,6 +26,7 @@ from benchmark.dns_servers import (
     start_dns_service,
     stop_dns_service,
     wait_for_dns_ready,
+    warmup_dns_cache,
 )
 from benchmark.remote import ssh_run
 from benchmark.results import ResultStore
@@ -131,6 +132,7 @@ def main():
     trials = s3["trials"]
     tool_max_qps = s3.get("tool_max_qps", {})
     clear_cache = bool(s3.get("clear_cache", False))
+    warmup_cache = bool(s3.get("warmup_cache", False)) and not clear_cache
 
     services = config["dns_services"]["services"]
     if args.dns_services:
@@ -150,6 +152,8 @@ def main():
         log.info("Per-tool max QPS overrides: %s", tool_max_qps)
     if clear_cache:
         log.info("Cache clearing enabled: will clear before each tool run")
+    elif warmup_cache:
+        log.info("Cache warmup enabled: will pre-populate cache per service via dnsperf")
 
     for dns_service in services:
         log.info("=== Testing DNS service: %s ===", dns_service)
@@ -162,6 +166,12 @@ def main():
             # Start this DNS service
             start_dns_service(config, dns_service)
             wait_for_dns_ready(config, timeout=30)
+
+            if warmup_cache and not config.get("dry_run"):
+                try:
+                    warmup_dns_cache(config)
+                except Exception as e:
+                    log.warning("Cache warmup failed for %s: %s", dns_service, e)
 
         except Exception as e:
             log.error("Failed to start %s: %s. Skipping.", dns_service, e)

@@ -81,6 +81,37 @@ def ensure_dns_running(config, service_name, timeout=30):
     wait_for_dns_ready(config, timeout=timeout)
 
 
+def warmup_dns_cache(config, qps=None, timeout=None):
+    """Pre-populate the resolver cache via a single pass through the dnsperf input file.
+
+    Uses a moderate QPS so the resolver can resolve each unique query
+    recursively without dropping requests.
+    """
+    client = config["hosts"]["client"]
+    server = config["hosts"]["server"]
+    input_file = config["input_files"]["dnsperf"]
+    query_timeout = config.get("timeout", 5)
+
+    s3 = config.get("script3", {})
+    warmup_qps = qps if qps is not None else int(s3.get("warmup_qps", 10000))
+    warmup_timeout = timeout if timeout is not None else int(s3.get("warmup_timeout", 600))
+
+    cmd = (
+        f"dnsperf -s {server} -d {input_file} -n 1"
+        f" -Q {warmup_qps} -c 1 -T 1 -t {query_timeout}"
+        f" -O suppress=timeout -O qps-threshold-wait=0"
+    )
+    log.info("Warming up cache on %s via dnsperf (Q=%d, one pass)...", server, warmup_qps)
+    result = ssh_run(client, cmd, timeout=warmup_timeout)
+    if result.returncode != 0:
+        log.warning(
+            "Cache warmup returned rc=%d: %s",
+            result.returncode, result.stderr.strip(),
+        )
+    else:
+        log.info("Cache warmup complete")
+
+
 def wait_for_dns_ready(config, timeout=30):
     """Poll until the DNS server on the resolver IP responds to queries.
 
