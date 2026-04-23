@@ -58,6 +58,8 @@ script2:
   trials: 3
 
 script3:
+  warmup_cache: false
+  clear_cache: false
   min_qps:  100000
   max_qps: 3000000
   qps_step: 100000

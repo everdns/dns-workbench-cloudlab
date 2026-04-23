@@ -1,12 +1,12 @@
 hosts:
-  server: 10.10.1.2
+  server: 10.10.1.1
   client: localhost
 
 server_interface: enp94s0f0np0
 client_interface: enp94s0f0np0
 
 input_files:
-  dnsperf: /local/repository/dnsperf_input
+  dnsperf: /local/repository/dnsperf_input2
   dnspyre: /local/repository/dnspyre_input
 
 dns_responder:
@@ -19,10 +19,7 @@ dns_services:
   clear_cache_script: /local/repository/clear_cache.sh
   services:
     - bind-ns
-    - powerdns-ns
     - knot-ns
-    - nsd-ns
-    - unbound-ns
 
 threads: 20
 dnspyre_workers: 600
@@ -35,6 +32,9 @@ dns_responder_batch_size: 64
 dns_responder_recieve_only: false
 pause_between_runs: 5
 max_delay_between_bursts: 10000000
+
+tools:
+  - dns64perf++
 
 script1:
   start_qps: 100000
