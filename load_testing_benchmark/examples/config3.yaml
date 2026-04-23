@@ -53,6 +53,8 @@ script2:
 script3:
   warmup_cache: true
   clear_cache: false
+  collectl: true
+  collectl_margin: 5
   min_qps:   50000
   max_qps: 3000000
   qps_step:  50000
