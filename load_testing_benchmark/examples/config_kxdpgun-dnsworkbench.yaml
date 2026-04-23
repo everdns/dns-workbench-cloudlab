@@ -1,0 +1,73 @@
+hosts:
+  server: 10.10.1.2
+  client: localhost
+
+server_interface: enp94s0f0np0
+client_interface: enp94s0f0np0
+
+input_files:
+  dnsperf: /local/repository/dnsperf_input2
+  dnspyre: /local/repository/dnspyre_input
+
+dns_responder:
+  path: /local/repository/dns_responder/dns_responder
+  xdp_prog: /local/repository/dns_responder/xdp/xdp_dns_redirect.o
+
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+  clear_cache_script: /local/repository/clear_cache.sh
+  services:
+    - bind-ns
+    - powerdns-ns
+    - knot-ns
+    - nsd-ns
+    - unbound-ns
+
+threads: 20
+dnspyre_workers: 600
+ports_per_thread: 30
+timeout: 1
+subnet: "10.0.0.0/4"
+runtime: 10
+dns_responder_margin: 10
+dns_responder_batch_size: 64
+dns_responder_recieve_only: false
+pause_between_runs: 5
+max_delay_between_bursts: 10000000
+
+tools:
+  - kxdpgun-dnsworkbench
+
+script1:
+  start_qps: 100000
+  qps_step: 100000
+  max_qps: 3000000
+  trials: 3
+
+script2:
+  accuracy_min_qps: 100000
+  accuracy_max_qps: 1000000
+  accuracy_step: 50000
+  trials: 3
+
+script3:
+  warmup_cache: false
+  clear_cache: false
+  collectl: true
+  collectl_margin: 5
+  min_qps:  100000
+  max_qps: 3000000
+  qps_step: 100000
+  trials: 3
+  # Optional per-tool max QPS overrides (falls back to max_qps above)
+  tool_max_qps:
+    dnsperf: 1500000
+    dnsperf-dnsworkbench-slice: 1500000
+    dnsperf-dnsworkbench-lencse: 1500000
+    dnspyre: 300000
+    dnspyre-dnsworkbench: 300000
+    dns64perf++: 3000000
+    dns64perfpp-dnsworkbench: 3000000
+    kxdpgun: 3000000
+    kxdpgun-dnsworkbench: 3000000
