@@ -566,6 +566,9 @@ def plot_load_impact(results, output_dir):
     # --- Combined 1x3: all DNS services overlaid on each of the three metrics ---
     _plot_load_impact_combined(results, output_dir)
 
+    # --- Per-service collectl resource charts (individual + 1x3 combined) ---
+    _plot_load_impact_resources(results, all_tools, output_dir)
+
     # --- 99.99% Threshold Summary Table ---
     _generate_threshold_summary(results, output_dir)
 
@@ -895,3 +898,144 @@ def _generate_threshold_summary(results, output_dir):
     path = os.path.join(output_dir, "threshold_summary.txt")
     with open(path, "w") as f:
         f.write(summary)
+
+
+# metric_id -> (median_csv_key, peak_csv_key, ylabel, category)
+COLLECTL_METRICS = [
+    ("cpu_totl",   "cpu_totl_median_pct",  "cpu_totl_peak_pct",  "CPU Total %",     "cpu"),
+    ("cpu_user",   "cpu_user_median_pct",  "cpu_user_peak_pct",  "CPU User %",      "cpu"),
+    ("cpu_sys",    "cpu_sys_median_pct",   "cpu_sys_peak_pct",   "CPU Sys %",       "cpu"),
+    ("mem_used",   "mem_used_median_mb",   "mem_used_peak_mb",   "Mem Used (MB)",   "mem"),
+    ("mem_tot",    "mem_tot_median_mb",    "mem_tot_peak_mb",    "Mem Total (MB)",  "mem"),
+    ("mem_free",   "mem_free_median_mb",   "mem_free_peak_mb",   "Mem Free (MB)",   "mem"),
+    ("mem_cached", "mem_cached_median_mb", "mem_cached_peak_mb", "Mem Cached (MB)", "mem"),
+    ("net_kb",     "net_kb_median_kbps",   "net_kb_peak_kbps",   "Net KB/s",        "net"),
+    ("net_rx_pkt", "net_rx_pkt_median",    "net_rx_pkt_peak",    "Net Rx Pkt/s",    "net"),
+    ("net_tx_pkt", "net_tx_pkt_median",    "net_tx_pkt_peak",    "Net Tx Pkt/s",    "net"),
+]
+
+# Which metrics appear in each combined 1x3 grid (Tot excluded — near-constant).
+COLLECTL_COMBINED = {
+    "cpu": ["cpu_user", "cpu_sys", "cpu_totl"],
+    "mem": ["mem_used", "mem_free", "mem_cached"],
+    "net": ["net_kb", "net_rx_pkt", "net_tx_pkt"],
+}
+
+
+def _plot_resource_panel(ax, by_tool_qps, median_key, peak_key, all_tools, ylabel):
+    """Draw one resource-metric panel: median + peak lines per tool vs QPS."""
+    for tool in sorted(by_tool_qps.keys()):
+        style = _tool_style(tool, all_tools)
+        x_vals = sorted(by_tool_qps[tool].keys())
+
+        med_x, med_mean, med_err = [], [], []
+        peak_x, peak_mean, peak_err = [], [], []
+        for qps in x_vals:
+            rows = by_tool_qps[tool][qps]
+            med_vals = [r[median_key] for r in rows if r.get(median_key) is not None]
+            peak_vals = [r[peak_key] for r in rows if r.get(peak_key) is not None]
+            if med_vals:
+                n = len(med_vals)
+                m = sum(med_vals) / n
+                s = math.sqrt(sum((v - m) ** 2 for v in med_vals) / (n - 1)) if n > 1 else 0.0
+                med_x.append(qps)
+                med_mean.append(m)
+                med_err.append(s)
+            if peak_vals:
+                n = len(peak_vals)
+                m = sum(peak_vals) / n
+                s = math.sqrt(sum((v - m) ** 2 for v in peak_vals) / (n - 1)) if n > 1 else 0.0
+                peak_x.append(qps)
+                peak_mean.append(m)
+                peak_err.append(s)
+
+        if med_x:
+            ax.errorbar(
+                med_x, med_mean, yerr=med_err, markersize=4, capsize=3, linewidth=1.5,
+                color=style["color"], marker=style["marker"], linestyle="-",
+                label=f"{tool} (median)",
+            )
+        if peak_x:
+            ax.errorbar(
+                peak_x, peak_mean, yerr=peak_err, markersize=4, capsize=3, linewidth=1.5,
+                color=style["color"], marker=style["marker"], linestyle="--",
+                label=f"{tool} (peak)",
+            )
+
+    ax.set_xlabel("Target QPS")
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.3)
+
+
+def _plot_load_impact_resources(results, all_tools, output_dir):
+    """Plot collectl resource charts per DNS service: individual per metric + 1x3 combined grids per category."""
+    os.makedirs(output_dir, exist_ok=True)
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    if not dns_services:
+        return
+
+    for dns_service in dns_services:
+        service_results = [r for r in results if r["dns_service"] == dns_service]
+
+        # Group once: tool -> target_qps -> list of rows
+        by_tool_qps = defaultdict(lambda: defaultdict(list))
+        for row in service_results:
+            by_tool_qps[row["tool"]][row["target_qps"]].append(row)
+
+        # --- Individual per-metric charts ---
+        for metric_id, median_key, peak_key, ylabel, _cat in COLLECTL_METRICS:
+            has_data = any(
+                r.get(median_key) is not None or r.get(peak_key) is not None
+                for r in service_results
+            )
+            if not has_data:
+                continue
+
+            fig, ax = plt.subplots(figsize=(12, 7))
+            _plot_resource_panel(ax, by_tool_qps, median_key, peak_key, all_tools, ylabel)
+            ax.legend(loc="best", fontsize=11)
+            path = os.path.join(output_dir, f"{dns_service}_{metric_id}.pdf")
+            fig.savefig(path, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+
+        # --- Combined 1x3 grids per category ---
+        metric_by_id = {m[0]: m for m in COLLECTL_METRICS}
+        for category, metric_ids in COLLECTL_COMBINED.items():
+            has_any = False
+            for mid in metric_ids:
+                _mid, med_k, peak_k, _yl, _c = metric_by_id[mid]
+                if any(r.get(med_k) is not None or r.get(peak_k) is not None
+                       for r in service_results):
+                    has_any = True
+                    break
+            if not has_any:
+                continue
+
+            fig, axes = plt.subplots(1, 3, figsize=(21, 7), squeeze=False)
+            for col, mid in enumerate(metric_ids):
+                _mid, med_k, peak_k, yl, _c = metric_by_id[mid]
+                ax = axes[0][col]
+                _plot_resource_panel(ax, by_tool_qps, med_k, peak_k, all_tools, yl)
+                ax.set_title(yl, fontsize=14, fontweight="bold")
+
+            # Shared legend below the figure (dedup by label)
+            seen = {}
+            for ax in axes[0]:
+                for handle, label in zip(*ax.get_legend_handles_labels()):
+                    if label not in seen:
+                        seen[label] = handle
+            if seen:
+                ncol = min(len(seen), 5)
+                fig.legend(
+                    seen.values(), seen.keys(),
+                    loc="lower center",
+                    bbox_to_anchor=(0.5, -0.02),
+                    ncol=ncol,
+                    fontsize=12,
+                    frameon=False,
+                )
+
+            fig.tight_layout(rect=[0, 0.06, 1, 1])
+            path = os.path.join(output_dir, f"{dns_service}_{category}_combined.pdf")
+            fig.savefig(path, dpi=150, bbox_inches="tight")
+            plt.close(fig)

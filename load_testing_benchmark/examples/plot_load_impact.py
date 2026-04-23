@@ -25,7 +25,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from benchmark.charts import plot_load_impact
+from benchmark.charts import COLLECTL_METRICS, plot_load_impact
+from benchmark.collectl import parse_collectl_file
 from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
@@ -67,16 +68,27 @@ def load_from_csv(csv_path):
                     "avg_latency_s", "min_latency_s", "max_latency_s", "latency_stddev_s"
                 ):
                     row[key] = float(row[key]) if row[key] else None
+            # Convert collectl columns (median + peak for each metric)
+            for _mid, median_key, peak_key, _yl, _cat in COLLECTL_METRICS:
+                for k in (median_key, peak_key):
+                    if k in row:
+                        row[k] = float(row[k]) if row[k] not in (None, "") else None
             results.append(row)
     return results
 
 
-def load_from_raw_dir(raw_dir):
-    """Load results by re-parsing raw tool output files."""
+def load_from_raw_dir(raw_dir, collectl_margin=5):
+    """Load results by re-parsing raw tool output files.
+
+    Also finds sibling `.collectl.txt` files under `../collectl/` (relative to
+    the raw dir) and merges their metrics into the matching rows.
+    """
     if os.path.isdir(os.path.join(raw_dir, "raw")):
         search_dir = os.path.join(raw_dir, "raw")
+        collectl_dir = os.path.join(raw_dir, "collectl")
     else:
         search_dir = raw_dir
+        collectl_dir = os.path.join(os.path.dirname(raw_dir) or ".", "collectl")
 
     raw_files = glob.glob(os.path.join(search_dir, "*.txt"))
     if not raw_files:
@@ -137,6 +149,14 @@ def load_from_raw_dir(raw_dir):
                 for pct, val in tool_result.percentiles.items():
                     row[f"latency_{pct}_s"] = val
 
+        collectl_file = os.path.join(
+            collectl_dir,
+            f"{dns_service}_{tool.name}_{target_qps}qps_trial{trial}.collectl.txt",
+        )
+        if os.path.isfile(collectl_file):
+            metrics = parse_collectl_file(collectl_file, collectl_margin)
+            row.update({k: v for k, v in metrics.items() if v is not None})
+
         results.append(row)
         log.info("Parsed %s vs %s at %d QPS trial %d: sent=%d completed=%d rate=%.2f%%",
                  tool.name, dns_service, target_qps, trial + 1,
@@ -156,6 +176,8 @@ def main():
                         help="Directory to save charts (default: charts/)")
     parser.add_argument("--max-qps", type=int, default=None,
                         help="Maximum target QPS to include in charts")
+    parser.add_argument("--collectl-margin", type=int, default=5,
+                        help="Seconds of samples to crop from each end of collectl trails (default: 5)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -171,7 +193,7 @@ def main():
         results = load_from_csv(args.csv)
         log.info("Loaded %d rows from %s", len(results), args.csv)
     else:
-        results = load_from_raw_dir(args.raw_dir)
+        results = load_from_raw_dir(args.raw_dir, collectl_margin=args.collectl_margin)
         log.info("Parsed %d result rows from raw output files", len(results))
         if results:
             os.makedirs(args.output_dir, exist_ok=True)

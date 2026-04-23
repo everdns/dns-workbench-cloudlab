@@ -125,6 +125,25 @@ def add_script3_args(parser):
         action="store_false",
         help="Disable cache warmup",
     )
+    parser.add_argument(
+        "--collectl",
+        dest="collectl",
+        action="store_true",
+        default=None,
+        help="Run collectl on the DNS server during each tool invocation and save the trail",
+    )
+    parser.add_argument(
+        "--no-collectl",
+        dest="collectl",
+        action="store_false",
+        help="Disable collectl monitoring",
+    )
+    parser.add_argument(
+        "--collectl-margin",
+        type=int,
+        default=None,
+        help="Seconds collectl starts before and continues after each tool run (default: 5)",
+    )
 
 
 def apply_script1_overrides(config, args):
@@ -174,4 +193,8 @@ def apply_script3_overrides(config, args):
         s3["clear_cache"] = args.clear_cache
     if getattr(args, "warmup_cache", None) is not None:
         s3["warmup_cache"] = args.warmup_cache
+    if getattr(args, "collectl", None) is not None:
+        s3["collectl"] = args.collectl
+    if getattr(args, "collectl_margin", None) is not None:
+        s3["collectl_margin"] = args.collectl_margin
     return config

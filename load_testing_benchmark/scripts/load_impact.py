@@ -20,6 +20,12 @@ from benchmark.config import (
     apply_script3_overrides,
     load_config,
 )
+from benchmark.collectl import (
+    collect_collectl_file,
+    parse_collectl_file,
+    run_collectl_session,
+    wait_collectl,
+)
 from benchmark.dns_servers import (
     clear_dns_cache,
     ensure_dns_running,
@@ -35,7 +41,7 @@ from benchmark.tools import get_tools
 log = logging.getLogger(__name__)
 
 
-def run_impact_test(config, tool, dns_service, qps, trial, store, script_name):
+def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s3):
     """Run a single load impact test.
 
     Returns result dict or None on failure.
@@ -49,12 +55,38 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name):
     log.info("Impact test: %s vs %s at %d QPS, trial %d",
              tool.name, dns_service, qps, trial + 1)
 
+    collectl_enabled = bool(s3.get("collectl", False))
+    collectl_margin = int(s3.get("collectl_margin", 5))
+    collectl_session = None
+    collectl_local_path = None
+
     if dry_run:
         log.info("[DRY RUN] Would run: %s", cmd)
+        if collectl_enabled:
+            runtime = config["runtime"]
+            log.info(
+                "[DRY RUN] Would run collectl on server for %d seconds (runtime=%d, margin=%d)",
+                runtime + 2 * collectl_margin, runtime, collectl_margin,
+            )
         return None
 
+    if collectl_enabled:
+        try:
+            runtime = config["runtime"]
+            remote_trail = (
+                f"/tmp/collectl_{dns_service}_{tool.name}_{qps}_{trial}.txt"
+            )
+            collectl_session = run_collectl_session(config, runtime, remote_trail)
+            collectl_local_path = os.path.join(
+                store._ensure_dir(script_name, "collectl"),
+                f"{dns_service}_{tool.name}_{qps}qps_trial{trial}.collectl.txt",
+            )
+        except Exception as e:
+            log.warning("Failed to start collectl: %s. Continuing without it.", e)
+            collectl_session = None
+
     try:
-        tool_timeout = config["runtime"] + 120
+        tool_timeout = config["runtime"] + 2 * collectl_margin + 120
         result = ssh_run(client, cmd, timeout=tool_timeout)
 
         tool_stdout = result.stdout
@@ -96,6 +128,27 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name):
             if tool_result.percentiles:
                 for pct, val in tool_result.percentiles.items():
                     row[f"latency_{pct}_s"] = val
+
+        if collectl_session is not None:
+            try:
+                wait_collectl(
+                    collectl_session["proc"],
+                    timeout=collectl_margin + 30,
+                )
+                collect_collectl_file(
+                    config,
+                    collectl_session["output_file"],
+                    collectl_local_path,
+                )
+                metrics = parse_collectl_file(
+                    collectl_local_path, collectl_margin,
+                )
+                row.update({k: v for k, v in metrics.items() if v is not None})
+            except Exception as e:
+                log.warning(
+                    "collectl collection/parse failed for %s vs %s at %d QPS trial %d: %s",
+                    tool.name, dns_service, qps, trial + 1, e,
+                )
 
         store.add_result(row)
         return row
@@ -154,6 +207,9 @@ def main():
         log.info("Cache clearing enabled: will clear before each tool run")
     elif warmup_cache:
         log.info("Cache warmup enabled: will pre-populate cache per service via dnsperf")
+    if s3.get("collectl"):
+        log.info("collectl enabled: will sample DNS server with margin=%ds per tool run",
+                 int(s3.get("collectl_margin", 5)))
 
     for dns_service in services:
         log.info("=== Testing DNS service: %s ===", dns_service)
@@ -204,7 +260,7 @@ def main():
                         try:
                             run_impact_test(
                                 config, tool, dns_service, qps, trial,
-                                store, script_name,
+                                store, script_name, s3,
                             )
                         except Exception as e:
                             log.error("Unhandled error: %s vs %s at %d QPS trial %d: %s",
