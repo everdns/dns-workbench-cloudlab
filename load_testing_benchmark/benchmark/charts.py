@@ -27,6 +27,16 @@ plt.rcParams.update({
 
 log = logging.getLogger(__name__)
 
+def _clip_lower(means, errs):
+        """Asymmetric error bars whose lower whisker never crosses zero."""
+        lower = [max(0.0, min(e, m if m is not None else e)) for e, m in zip(errs, means)]
+        return [lower, list(errs)]
+
+def _clip_lower_higher(means, errs):
+        """Asymmetric error bars whose upper whisker never goes above 100 and lower below 0."""
+        lower = [max(0.0, min(e, m if m is not None else e)) for e, m in zip(errs, means)]
+        upper = [max(0.0, min(e, (100.0 - m) if m is not None else e)) for e, m in zip(errs, means)]
+        return [lower, upper]
 
 def _interval_sort_key(label):
     """Sort interval labels by numeric timescale (e.g. 10ms < 100ms < 1s)."""
@@ -730,7 +740,7 @@ def _plot_load_impact_combined(results, output_dir):
     #     own color (still readable when printed in greyscale thanks to the
     #     differing linestyles/markers below)
     #   - tool linestyles/markers: distinguish tools within the same service
-    COMBINED_SERVICE_COLORS = ["#000000", "#FE6100", "#648FFF", "#DC267F", "#009E73"]
+    # COMBINED_SERVICE_COLORS is module-level so the resources figure can share it.
     COMBINED_TOOL_MARKERS = ["o", "s", "^", "D", "v"]
     COMBINED_TOOL_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
 
@@ -740,11 +750,6 @@ def _plot_load_impact_combined(results, output_dir):
                    for i, t in enumerate(tools_present)}
     tool_linestyle = {t: COMBINED_TOOL_LINESTYLES[i % len(COMBINED_TOOL_LINESTYLES)]
                       for i, t in enumerate(tools_present)}
-
-    def _clip_lower(means, errs):
-        """Asymmetric error bars whose lower whisker never crosses zero."""
-        lower = [max(0.0, min(e, m if m is not None else e)) for e, m in zip(errs, means)]
-        return [lower, list(errs)]
 
     # Group once: tool -> dns_service -> target_qps -> [rows]
     by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -914,128 +919,165 @@ COLLECTL_METRICS = [
     ("net_tx_pkt", "net_tx_pkt_median",    "net_tx_pkt_peak",    "Net Tx Pkt/s",    "net"),
 ]
 
-# Which metrics appear in each combined 1x3 grid (Tot excluded — near-constant).
-COLLECTL_COMBINED = {
-    "cpu": ["cpu_user", "cpu_sys", "cpu_totl"],
-    "mem": ["mem_used", "mem_free", "mem_cached"],
-    "net": ["net_kb", "net_rx_pkt", "net_tx_pkt"],
-}
+# Shared service palette (matches _plot_load_impact_combined). 5 hues, enough for <=5 DNS services.
+COMBINED_SERVICE_COLORS = ["#000000", "#FE6100", "#648FFF", "#DC267F", "#009E73"]
 
 
-def _plot_resource_panel(ax, by_tool_qps, median_key, peak_key, all_tools, ylabel):
-    """Draw one resource-metric panel: median + peak lines per tool vs QPS."""
+def _draw_median(ax, qps_map, median_key, color, marker, label):
+    """Draw a median line (with stddev error bars across trials) for one series onto ax."""
+    xs, means, errs = [], [], []
+    for qps in sorted(qps_map.keys()):
+        vals = [r[median_key] for r in qps_map[qps] if r.get(median_key) is not None]
+        if not vals:
+            continue
+        n = len(vals)
+        m = sum(vals) / n
+        s = math.sqrt(sum((v - m) ** 2 for v in vals) / (n - 1)) if n > 1 else 0.0
+        xs.append(qps); means.append(m); errs.append(s)
+    if xs:
+        yerr = _clip_lower_higher(means, errs) if median_key.endswith("_pct") else errs
+        ax.errorbar(xs, means, yerr=yerr, markersize=4, capsize=3, linewidth=1.5,
+                    color=color, marker=marker, linestyle="-", label=label)
+
+
+# Per-service panel (Figure 2 rows): one color per tool.
+def _per_service_panel(ax, by_tool_qps, median_key, all_tools, ylabel):
     for tool in sorted(by_tool_qps.keys()):
         style = _tool_style(tool, all_tools)
-        x_vals = sorted(by_tool_qps[tool].keys())
+        _draw_median(ax, by_tool_qps[tool], median_key,
+                     style["color"], style["marker"], tool)
+    ax.set_xlabel("Target QPS")
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.3)
 
-        med_x, med_mean, med_err = [], [], []
-        peak_x, peak_mean, peak_err = [], [], []
-        for qps in x_vals:
-            rows = by_tool_qps[tool][qps]
-            med_vals = [r[median_key] for r in rows if r.get(median_key) is not None]
-            peak_vals = [r[peak_key] for r in rows if r.get(peak_key) is not None]
-            if med_vals:
-                n = len(med_vals)
-                m = sum(med_vals) / n
-                s = math.sqrt(sum((v - m) ** 2 for v in med_vals) / (n - 1)) if n > 1 else 0.0
-                med_x.append(qps)
-                med_mean.append(m)
-                med_err.append(s)
-            if peak_vals:
-                n = len(peak_vals)
-                m = sum(peak_vals) / n
-                s = math.sqrt(sum((v - m) ** 2 for v in peak_vals) / (n - 1)) if n > 1 else 0.0
-                peak_x.append(qps)
-                peak_mean.append(m)
-                peak_err.append(s)
 
-        if med_x:
-            ax.errorbar(
-                med_x, med_mean, yerr=med_err, markersize=4, capsize=3, linewidth=1.5,
-                color=style["color"], marker=style["marker"], linestyle="-",
-                label=f"{tool} (median)",
-            )
-        if peak_x:
-            ax.errorbar(
-                peak_x, peak_mean, yerr=peak_err, markersize=4, capsize=3, linewidth=1.5,
-                color=style["color"], marker=style["marker"], linestyle="--",
-                label=f"{tool} (peak)",
-            )
-
+# All-services panel (Figure 1): color = service, marker = tool.
+def _all_services_panel(ax, by_tool_svc_qps, median_key, svc_color, tool_marker, ylabel):
+    for tool in sorted(by_tool_svc_qps.keys()):
+        for svc in sorted(by_tool_svc_qps[tool].keys()):
+            _draw_median(ax, by_tool_svc_qps[tool][svc], median_key,
+                         svc_color[svc], tool_marker[tool], f"{tool} / {svc}")
     ax.set_xlabel("Target QPS")
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
 
 
 def _plot_load_impact_resources(results, all_tools, output_dir):
-    """Plot collectl resource charts per DNS service: individual per metric + 1x3 combined grids per category."""
+    """Plot collectl resources as two consolidated figures.
+
+    - all_services_resources.pdf: 1x3 grid covering every (DNS service, tool).
+    - per_service_resources.pdf:  Nx3 grid, one row per DNS service.
+
+    Panels: CPU Total, Mem Cached, Net KB/s.
+    """
     os.makedirs(output_dir, exist_ok=True)
     dns_services = sorted(set(row["dns_service"] for row in results))
     if not dns_services:
         return
 
-    for dns_service in dns_services:
-        service_results = [r for r in results if r["dns_service"] == dns_service]
+    resource_keys = (
+        "cpu_totl_median_pct",
+        "mem_used_median_mb",
+        "net_kb_median_kbps",
+    )
+    if not any(r.get(k) is not None for r in results for k in resource_keys):
+        return
 
-        # Group once: tool -> target_qps -> list of rows
+    PANELS = (
+        ("cpu_totl_median_pct",  "CPU Total (%)"),
+        ("mem_used_median_mb", "RAM Used (MB)"),
+        ("net_kb_median_kbps",   "Net KB/s"),
+    )
+    COL_TITLES = ("CPU Total", "RAM Used", "Net KB/s")
+
+    # ---------- Figure 1: all_services_resources.pdf (1x3) ----------
+    tools_present = sorted(set(row["tool"] for row in results))
+    svc_color = {s: COMBINED_SERVICE_COLORS[i % len(COMBINED_SERVICE_COLORS)]
+                 for i, s in enumerate(dns_services)}
+    tool_marker = {t: _tool_style(t, all_tools)["marker"] for t in tools_present}
+
+    by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in results:
+        by_tool_svc_qps[row["tool"]][row["dns_service"]][row["target_qps"]].append(row)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), squeeze=False)
+    panel_axes = [axes[0][0], axes[0][1], axes[0][2]]
+    for ax, (med_k, ylabel), title in zip(panel_axes, PANELS, COL_TITLES):
+        _all_services_panel(ax, by_tool_svc_qps, med_k, svc_color, tool_marker, ylabel)
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.set_xlabel(ax.get_xlabel(), fontsize=14)
+        ax.set_ylabel(ax.get_ylabel(), fontsize=14)
+        ax.tick_params(labelsize=14)
+        ax.xaxis.get_offset_text().set_fontsize(14)
+        ax.yaxis.get_offset_text().set_fontsize(14)
+
+    seen = {}
+    for ax in panel_axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in seen:
+                seen[label] = handle
+    if seen:
+        ncol = min(len(seen), 4)
+        fig.legend(
+            seen.values(), seen.keys(),
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=ncol,
+            fontsize=14,
+            frameon=False,
+        )
+    fig.tight_layout(rect=[0, 0.08, 1, 1])
+    path = os.path.join(output_dir, "all_services_resources.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # ---------- Figure 2: per_service_resources.pdf (Nx3) ----------
+    n_rows = len(dns_services)
+    fig, axes = plt.subplots(n_rows, 3, figsize=(18, 4 * n_rows), squeeze=False)
+    for col, title in enumerate(COL_TITLES):
+        axes[0][col].set_title(title, fontsize=14, fontweight="bold")
+
+    for row, svc in enumerate(dns_services):
+        svc_rows = [r for r in results if r["dns_service"] == svc]
         by_tool_qps = defaultdict(lambda: defaultdict(list))
-        for row in service_results:
-            by_tool_qps[row["tool"]][row["target_qps"]].append(row)
+        for r in svc_rows:
+            by_tool_qps[r["tool"]][r["target_qps"]].append(r)
+        for col, (med_k, ylabel) in enumerate(PANELS):
+            _per_service_panel(axes[row][col], by_tool_qps, med_k, all_tools, ylabel)
+        axes[row][0].set_ylabel(f"{svc}\n{PANELS[0][1]}")
 
-        # --- Individual per-metric charts ---
-        for metric_id, median_key, peak_key, ylabel, _cat in COLLECTL_METRICS:
-            has_data = any(
-                r.get(median_key) is not None or r.get(peak_key) is not None
-                for r in service_results
-            )
-            if not has_data:
-                continue
+    seen = {}
+    for row_axes in axes:
+        for ax in row_axes:
+            for handle, label in zip(*ax.get_legend_handles_labels()):
+                if label not in seen:
+                    seen[label] = handle
+    if seen:
+        ncol = min(len(seen), 5)
+        fig.legend(seen.values(), seen.keys(),
+                   loc="lower center", bbox_to_anchor=(0.5, -0.01),
+                   ncol=ncol, fontsize=12, frameon=False)
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
+    path = os.path.join(output_dir, "per_service_resources.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
-            fig, ax = plt.subplots(figsize=(12, 7))
-            _plot_resource_panel(ax, by_tool_qps, median_key, peak_key, all_tools, ylabel)
-            ax.legend(loc="best", fontsize=11)
-            path = os.path.join(output_dir, f"{dns_service}_{metric_id}.pdf")
-            fig.savefig(path, dpi=150, bbox_inches="tight")
-            plt.close(fig)
+    # ---------- Figure 3: all_services_cpu_total.pdf (standalone CPU total) ----------
+    fig, ax = plt.subplots(figsize=(12, 7))
+    _all_services_panel(ax, by_tool_svc_qps, "cpu_totl_median_pct",
+                        svc_color, tool_marker, "CPU Total (%)")
+    ax.set_title("CPU Total", fontsize=14, fontweight="bold")
+    ax.tick_params(labelsize=14)
+    ax.xaxis.get_offset_text().set_fontsize(14)
+    ax.yaxis.get_offset_text().set_fontsize(14)
 
-        # --- Combined 1x3 grids per category ---
-        metric_by_id = {m[0]: m for m in COLLECTL_METRICS}
-        for category, metric_ids in COLLECTL_COMBINED.items():
-            has_any = False
-            for mid in metric_ids:
-                _mid, med_k, peak_k, _yl, _c = metric_by_id[mid]
-                if any(r.get(med_k) is not None or r.get(peak_k) is not None
-                       for r in service_results):
-                    has_any = True
-                    break
-            if not has_any:
-                continue
-
-            fig, axes = plt.subplots(1, 3, figsize=(21, 7), squeeze=False)
-            for col, mid in enumerate(metric_ids):
-                _mid, med_k, peak_k, yl, _c = metric_by_id[mid]
-                ax = axes[0][col]
-                _plot_resource_panel(ax, by_tool_qps, med_k, peak_k, all_tools, yl)
-                ax.set_title(yl, fontsize=14, fontweight="bold")
-
-            # Shared legend below the figure (dedup by label)
-            seen = {}
-            for ax in axes[0]:
-                for handle, label in zip(*ax.get_legend_handles_labels()):
-                    if label not in seen:
-                        seen[label] = handle
-            if seen:
-                ncol = min(len(seen), 5)
-                fig.legend(
-                    seen.values(), seen.keys(),
-                    loc="lower center",
-                    bbox_to_anchor=(0.5, -0.02),
-                    ncol=ncol,
-                    fontsize=12,
-                    frameon=False,
-                )
-
-            fig.tight_layout(rect=[0, 0.06, 1, 1])
-            path = os.path.join(output_dir, f"{dns_service}_{category}_combined.pdf")
-            fig.savefig(path, dpi=150, bbox_inches="tight")
-            plt.close(fig)
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ncol = min(len(handles), 4)
+        fig.legend(handles, labels,
+                   loc="lower center", bbox_to_anchor=(0.5, -0.02),
+                   ncol=ncol, fontsize=14, frameon=False)
+    fig.tight_layout(rect=[0, 0.08, 1, 1])
+    path = os.path.join(output_dir, "all_services_cpu_total.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)

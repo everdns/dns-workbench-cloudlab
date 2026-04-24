@@ -55,18 +55,7 @@ script3:
   clear_cache: false
   collectl: true
   collectl_margin: 5
-  min_qps:   50000
-  max_qps: 3000000
-  qps_step:  50000
-  trials: 3
-  # Optional per-tool max QPS overrides (falls back to max_qps above)
-  tool_max_qps:
-    dnsperf: 1500000
-    dnsperf-dnsworkbench-slice: 1500000
-    dnsperf-dnsworkbench-lencse: 1500000
-    dnspyre: 300000
-    dnspyre-dnsworkbench: 300000
-    dns64perf++: 3000000
-    dns64perfpp-dnsworkbench: 3000000
-    kxdpgun: 3000000
-    kxdpgun-dnsworkbench: 3000000
+  min_qps:  100000
+  max_qps: 2000000
+  qps_step: 100000
+  trials: 20
