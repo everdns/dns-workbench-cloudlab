@@ -27,17 +27,6 @@ plt.rcParams.update({
 
 log = logging.getLogger(__name__)
 
-def _clip_lower(means, errs):
-        """Asymmetric error bars whose lower whisker never crosses zero."""
-        lower = [max(0.0, min(e, m if m is not None else e)) for e, m in zip(errs, means)]
-        return [lower, list(errs)]
-
-def _clip_lower_higher(means, errs):
-        """Asymmetric error bars whose upper whisker never goes above 100 and lower below 0."""
-        lower = [max(0.0, min(e, m if m is not None else e)) for e, m in zip(errs, means)]
-        upper = [max(0.0, min(e, (100.0 - m) if m is not None else e)) for e, m in zip(errs, means)]
-        return [lower, upper]
-
 def _interval_sort_key(label):
     """Sort interval labels by numeric timescale (e.g. 10ms < 100ms < 1s)."""
     import re
@@ -118,6 +107,44 @@ def _trial_mean_std(rows, key):
     return mean, std
 
 
+def _percentiles(vals, pcts):
+    """Linearly-interpolated percentiles for a list of numeric samples.
+
+    `vals` need not be sorted. `pcts` is an iterable of percentiles in [0, 100].
+    Returns a list of values matching `pcts` order.
+    """
+    s = sorted(vals)
+    n = len(s)
+    if n == 0:
+        return [0.0 for _ in pcts]
+    if n == 1:
+        return [s[0] for _ in pcts]
+    out = []
+    for p in pcts:
+        idx = (p / 100.0) * (n - 1)
+        lo = int(math.floor(idx))
+        hi = int(math.ceil(idx))
+        if lo == hi:
+            out.append(s[lo])
+        else:
+            out.append(s[lo] + (s[hi] - s[lo]) * (idx - lo))
+    return out
+
+
+def _trial_median_p1_p99(rows, key):
+    """Return (median, lower_err, upper_err) of rows[key] across trials.
+
+    lower_err = median - p1, upper_err = p99 - median. Both errors are >= 0
+    so the pair can be passed directly as yerr=[lower, upper] to errorbar.
+    For small n, p1 -> min and p99 -> max.
+    """
+    vals = [r[key] for r in rows if r.get(key) is not None]
+    if not vals:
+        return 0.0, 0.0, 0.0
+    p1, median, p99 = _percentiles(vals, (1, 50, 99))
+    return median, max(0.0, median - p1), max(0.0, p99 - median)
+
+
 def plot_max_throughput(results, output_dir):
     """Plot requested vs achieved QPS per tool (Script 1).
 
@@ -139,12 +166,15 @@ def plot_max_throughput(results, output_dir):
     for tool in all_tools:
         style = _tool_style(tool, all_tools)
         x_vals = sorted(by_tool_qps[tool].keys())
-        y_mean, y_err = [], []
+        y_med, y_lo, y_hi = [], [], []
         for qps in x_vals:
-            mean, std = _trial_mean_std(by_tool_qps[tool][qps], "achieved_qps_responder")
-            y_mean.append(mean)
-            y_err.append(std)
-        ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+            m, lo, hi = _trial_median_p1_p99(
+                by_tool_qps[tool][qps], "achieved_qps_responder"
+            )
+            y_med.append(m)
+            y_lo.append(lo)
+            y_hi.append(hi)
+        ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                     capsize=3, linewidth=1.5, label=tool, **style)
 
     # Plot ideal line (y=x)
@@ -190,12 +220,13 @@ def plot_qps_accuracy(results, output_dir):
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "mean_qps")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], "mean_qps")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(hi)
+            ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         if x_vals:
@@ -217,12 +248,13 @@ def plot_qps_accuracy(results, output_dir):
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "stddev")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], "stddev")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(hi)
+            ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
@@ -240,12 +272,13 @@ def plot_qps_accuracy(results, output_dir):
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "max_deviation")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], "max_deviation")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(hi)
+            ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.set_xlabel("Target QPS")
@@ -282,12 +315,13 @@ def plot_qps_accuracy(results, output_dir):
                 for tool in sorted(by_tool_qps.keys()):
                     style = _tool_style(tool, all_tools)
                     x_vals = sorted(by_tool_qps[tool].keys())
-                    y_mean, y_err = [], []
+                    y_med, y_lo, y_hi = [], [], []
                     for qps in x_vals:
-                        mean, std = _trial_mean_std(by_tool_qps[tool][qps], key)
-                        y_mean.append(mean)
-                        y_err.append(std)
-                    ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                        m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], key)
+                        y_med.append(m)
+                        y_lo.append(lo)
+                        y_hi.append(hi)
+                    ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=3,
                                 capsize=3, linewidth=1.5, label=tool, **style)
 
                 if show_ideal and x_vals:
@@ -477,12 +511,13 @@ def plot_load_impact(results, output_dir):
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "answer_rate_pct")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], "answer_rate_pct")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(min(hi, max(0.0, 100.0 - m)))
+            ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
         ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, label="99.99% threshold")
@@ -509,21 +544,16 @@ def plot_load_impact(results, output_dir):
             for tool in sorted(latency_tools):
                 style = _tool_style(tool, all_tools)
                 x_vals = sorted(by_tool_qps[tool].keys())
-                y_mean, y_err = [], []
+                y_med, y_lo, y_hi = [], [], []
                 for qps in x_vals:
                     rows = by_tool_qps[tool][qps]
                     lats = [r["avg_latency_s"] * 1000 for r in rows
                             if r.get("avg_latency_s") is not None]
-                    n = len(lats)
-                    mean = sum(lats) / n if n else 0
-                    if n > 1:
-                        variance = sum((v - mean) ** 2 for v in lats) / (n - 1)
-                        std = math.sqrt(variance)
-                    else:
-                        std = 0.0
-                    y_mean.append(mean)
-                    y_err.append(std)
-                ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                             capsize=3, linewidth=1.5, label=tool, **style)
 
             ax.set_xlabel("Target QPS")
@@ -543,18 +573,21 @@ def plot_load_impact(results, output_dir):
         for tool in sorted(by_tool_qps.keys()):
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            sent_mean, sent_err = [], []
-            comp_mean, comp_err = [], []
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
             for qps in x_vals:
-                mean_s, std_s = _trial_mean_std(by_tool_qps[tool][qps], "queries_sent")
-                mean_c, std_c = _trial_mean_std(by_tool_qps[tool][qps], "queries_completed")
-                sent_mean.append(mean_s)
-                sent_err.append(std_s)
-                comp_mean.append(mean_c)
-                comp_err.append(std_c)
-            ax.errorbar(sent_mean, comp_mean, xerr=sent_err, yerr=comp_err,
+                ms, slo, shi = _trial_median_p1_p99(by_tool_qps[tool][qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(by_tool_qps[tool][qps], "queries_completed")
+                sent_med.append(ms)
+                sent_lo.append(slo)
+                sent_hi.append(shi)
+                comp_med.append(mc)
+                comp_lo.append(clo)
+                comp_hi.append(chi)
+            ax.errorbar(sent_med, comp_med,
+                        xerr=[sent_lo, sent_hi], yerr=[comp_lo, comp_hi],
                         markersize=4, capsize=3, linewidth=1.5, label=tool, **style)
-            all_sent.extend(sent_mean)
+            all_sent.extend(sent_med)
 
         if all_sent:
             lo, hi = min(all_sent), max(all_sent)
@@ -623,12 +656,13 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
         for tool in tools_here:
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(by_tool_qps[tool][qps], "answer_rate_pct")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                m, lo, hi = _trial_median_p1_p99(by_tool_qps[tool][qps], "answer_rate_pct")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(min(hi, max(0.0, 100.0 - m)))
+            ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=3,
                         capsize=2, linewidth=1.2, label=tool, **style)
         ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8)
         ax.set_xlabel("Target QPS", fontsize=14)
@@ -649,17 +683,16 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
             for tool in sorted(latency_tools):
                 style = _tool_style(tool, all_tools)
                 x_vals = sorted(by_tool_qps[tool].keys())
-                y_mean, y_err = [], []
+                y_med, y_lo, y_hi = [], [], []
                 for qps in x_vals:
                     rows = by_tool_qps[tool][qps]
                     lats = [r["avg_latency_s"] * 1000 for r in rows
                             if r.get("avg_latency_s") is not None]
-                    n = len(lats)
-                    mean = sum(lats) / n if n else 0
-                    std = math.sqrt(sum((v - mean) ** 2 for v in lats) / (n - 1)) if n > 1 else 0.0
-                    y_mean.append(mean)
-                    y_err.append(std)
-                ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=3,
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=3,
                             capsize=2, linewidth=1.2, label=tool, **style)
         else:
             ax.text(0.5, 0.5, "No latency data", ha="center", va="center",
@@ -677,16 +710,16 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
         for tool in tools_here:
             style = _tool_style(tool, all_tools)
             x_vals = sorted(by_tool_qps[tool].keys())
-            sent_mean, comp_mean = [], []
+            sent_med, comp_med = [], []
             for qps in x_vals:
-                ms, _ = _trial_mean_std(by_tool_qps[tool][qps], "queries_sent")
-                mc, _ = _trial_mean_std(by_tool_qps[tool][qps], "queries_completed")
-                sent_mean.append(ms)
-                comp_mean.append(mc)
-            ax.plot(sent_mean, comp_mean, marker=style.get("marker"),
+                ms, _, _ = _trial_median_p1_p99(by_tool_qps[tool][qps], "queries_sent")
+                mc, _, _ = _trial_median_p1_p99(by_tool_qps[tool][qps], "queries_completed")
+                sent_med.append(ms)
+                comp_med.append(mc)
+            ax.plot(sent_med, comp_med, marker=style.get("marker"),
                     color=style.get("color"), linestyle=style.get("linestyle", "-"),
                     markersize=3, linewidth=1.2, label=tool)
-            all_sent_grid.extend(sent_mean)
+            all_sent_grid.extend(sent_med)
         if all_sent_grid:
             lo, hi = min(all_sent_grid), max(all_sent_grid)
             ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5, linewidth=0.8, label="Ideal")
@@ -775,12 +808,13 @@ def _plot_load_impact_combined(results, output_dir):
             x_vals = sorted(svc_qps.keys())
 
             # Answer Rate
-            y_mean, y_err = [], []
+            y_med, y_lo, y_hi = [], [], []
             for qps in x_vals:
-                mean, std = _trial_mean_std(svc_qps[qps], "answer_rate_pct")
-                y_mean.append(mean)
-                y_err.append(std)
-            ax_rate.errorbar(x_vals, y_mean, yerr=_clip_lower(y_mean, y_err),
+                m, lo, hi = _trial_median_p1_p99(svc_qps[qps], "answer_rate_pct")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(min(hi, max(0.0, 100.0 - m)))
+            ax_rate.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
                              markersize=3, capsize=2, linewidth=1.2,
                              label=label, **plot_kwargs)
 
@@ -790,34 +824,32 @@ def _plot_load_impact_combined(results, output_dir):
                 for rows in svc_qps.values() for r in rows
             )
             if has_latency:
-                y_mean, y_err = [], []
+                y_med, y_lo, y_hi = [], [], []
                 for qps in x_vals:
                     lats = [r["avg_latency_s"] * 1000 for r in svc_qps[qps]
                             if r.get("avg_latency_s") is not None]
-                    n = len(lats)
-                    mean = sum(lats) / n if n else 0
-                    std = math.sqrt(sum((v - mean) ** 2 for v in lats) / (n - 1)) if n > 1 else 0.0
-                    y_mean.append(mean)
-                    y_err.append(std)
-                ax_lat.errorbar(x_vals, y_mean, yerr=_clip_lower(y_mean, y_err),
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax_lat.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
                                 markersize=3, capsize=2, linewidth=1.2,
                                 label=label, **plot_kwargs)
 
-            # Queries Sent vs Answers Received (both axes clipped at zero)
-            sent_mean, sent_err, comp_mean, comp_err = [], [], [], []
+            # Queries Sent vs Answers Received
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
             for qps in x_vals:
-                ms, ss = _trial_mean_std(svc_qps[qps], "queries_sent")
-                mc, sc = _trial_mean_std(svc_qps[qps], "queries_completed")
-                sent_mean.append(ms)
-                sent_err.append(ss)
-                comp_mean.append(mc)
-                comp_err.append(sc)
-            ax_qc.errorbar(sent_mean, comp_mean,
-                           xerr=_clip_lower(sent_mean, sent_err),
-                           yerr=_clip_lower(comp_mean, comp_err),
+                ms, slo, shi = _trial_median_p1_p99(svc_qps[qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(svc_qps[qps], "queries_completed")
+                sent_med.append(ms); sent_lo.append(slo); sent_hi.append(shi)
+                comp_med.append(mc); comp_lo.append(clo); comp_hi.append(chi)
+            ax_qc.errorbar(sent_med, comp_med,
+                           xerr=[sent_lo, sent_hi],
+                           yerr=[comp_lo, comp_hi],
                            markersize=3, capsize=2, linewidth=1.2,
                            label=label, **plot_kwargs)
-            all_sent_vals.extend(sent_mean)
+            all_sent_vals.extend(sent_med)
 
     ax_rate.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8,
                     label="99.99% threshold")
@@ -924,20 +956,19 @@ COMBINED_SERVICE_COLORS = ["#000000", "#FE6100", "#648FFF", "#DC267F", "#009E73"
 
 
 def _draw_median(ax, qps_map, median_key, color, marker, label):
-    """Draw a median line (with stddev error bars across trials) for one series onto ax."""
-    xs, means, errs = [], [], []
+    """Draw a median line with p1/p99 error bars across trials for one series onto ax."""
+    xs, meds, lo_errs, hi_errs = [], [], [], []
     for qps in sorted(qps_map.keys()):
-        vals = [r[median_key] for r in qps_map[qps] if r.get(median_key) is not None]
-        if not vals:
+        rows = [r for r in qps_map[qps] if r.get(median_key) is not None]
+        if not rows:
             continue
-        n = len(vals)
-        m = sum(vals) / n
-        s = math.sqrt(sum((v - m) ** 2 for v in vals) / (n - 1)) if n > 1 else 0.0
-        xs.append(qps); means.append(m); errs.append(s)
+        m, lo, hi = _trial_median_p1_p99(rows, median_key)
+        xs.append(qps); meds.append(m); lo_errs.append(lo); hi_errs.append(hi)
     if xs:
-        yerr = _clip_lower_higher(means, errs) if median_key.endswith("_pct") else errs
-        ax.errorbar(xs, means, yerr=yerr, markersize=4, capsize=3, linewidth=1.5,
-                    color=color, marker=marker, linestyle="-", label=label)
+        if median_key.endswith("_pct"):
+            hi_errs = [min(h, max(0.0, 100.0 - m)) for h, m in zip(hi_errs, meds)]
+        ax.errorbar(xs, meds, yerr=[lo_errs, hi_errs], markersize=4, capsize=3,
+                    linewidth=1.5, color=color, marker=marker, linestyle="-", label=label)
 
 
 # Per-service panel (Figure 2 rows): one color per tool.

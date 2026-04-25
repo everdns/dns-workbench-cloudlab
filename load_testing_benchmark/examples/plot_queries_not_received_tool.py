@@ -24,7 +24,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from benchmark.charts import _tool_style, _trial_mean_std
+from benchmark.charts import _tool_style, _trial_median_p1_p99
 
 log = logging.getLogger(__name__)
 
@@ -59,12 +59,15 @@ def plot_queries_not_received_tool(results, output_dir):
     for tool in all_tools:
         style = _tool_style(tool, all_tools)
         x_vals = sorted(by_tool_qps[tool].keys())
-        y_mean, y_err = [], []
+        y_med, y_lo, y_hi = [], [], []
         for qps in x_vals:
-            mean, std = _trial_mean_std(by_tool_qps[tool][qps], "replies_dropped_per_sec")
-            y_mean.append(mean)
-            y_err.append(std)
-        ax.errorbar(x_vals, y_mean, yerr=y_err, markersize=4,
+            m, lo, hi = _trial_median_p1_p99(
+                by_tool_qps[tool][qps], "replies_dropped_per_sec"
+            )
+            y_med.append(m)
+            y_lo.append(lo)
+            y_hi.append(hi)
+        ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                     capsize=3, linewidth=1.5, label=tool, **style)
 
     ax.set_xlabel("Requested QPS")
