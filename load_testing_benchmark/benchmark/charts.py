@@ -612,6 +612,9 @@ def plot_load_impact(results, output_dir):
     # --- Per-service collectl resource charts (individual + 1x3 combined) ---
     _plot_load_impact_resources(results, all_tools, output_dir)
 
+    # --- Combined 2x3: metrics (top) + resources (bottom), all services overlaid ---
+    _plot_load_impact_combined_full(results, output_dir)
+
     # --- 99.99% Threshold Summary Table ---
     _generate_threshold_summary(results, output_dir)
 
@@ -898,6 +901,188 @@ def _plot_load_impact_combined(results, output_dir):
 
     fig.tight_layout(rect=[0, 0.08, 1, 1])
     path = os.path.join(output_dir, "all_services_combined.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_load_impact_combined_full(results, output_dir):
+    """2x3 figure merging all_services_combined (top row) with all_services_resources (bottom row).
+
+    Top row:    Answer Rate, Avg Latency, Queries Sent vs Answers Received
+    Bottom row: CPU Total, RAM Used, Net KB/s
+    Styling:    color = DNS service, marker + linestyle = tool (shared legend).
+    """
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    if not dns_services:
+        return
+    tools_present = sorted(set(row["tool"] for row in results))
+
+    resource_keys = ("cpu_totl_median_pct", "mem_used_median_mb", "net_kb_median_kbps")
+    if not any(r.get(k) is not None for r in results for k in resource_keys):
+        return
+
+    COMBINED_TOOL_MARKERS = ["o", "s", "^", "D", "v"]
+    COMBINED_TOOL_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+    svc_color = {s: COMBINED_SERVICE_COLORS[i % len(COMBINED_SERVICE_COLORS)]
+                 for i, s in enumerate(dns_services)}
+    tool_marker = {t: COMBINED_TOOL_MARKERS[i % len(COMBINED_TOOL_MARKERS)]
+                   for i, t in enumerate(tools_present)}
+    tool_linestyle = {t: COMBINED_TOOL_LINESTYLES[i % len(COMBINED_TOOL_LINESTYLES)]
+                      for i, t in enumerate(tools_present)}
+
+    by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in results:
+        by_tool_svc_qps[row["tool"]][row["dns_service"]][row["target_qps"]].append(row)
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12), squeeze=False)
+    ax_rate, ax_lat, ax_qc = axes[0]
+    ax_cpu, ax_mem, ax_net = axes[1]
+
+    all_sent_vals = []
+    for tool in tools_present:
+        for svc in dns_services:
+            if svc not in by_tool_svc_qps[tool]:
+                continue
+            svc_qps = by_tool_svc_qps[tool][svc]
+            label = f"{tool} / {svc}"
+            plot_kwargs = dict(
+                color=svc_color[svc],
+                marker=tool_marker[tool],
+                linestyle=tool_linestyle[tool],
+            )
+            x_vals = sorted(svc_qps.keys())
+
+            # Answer Rate
+            y_med, y_lo, y_hi = [], [], []
+            for qps in x_vals:
+                m, lo, hi = _trial_median_p1_p99(svc_qps[qps], "answer_rate_pct")
+                y_med.append(m)
+                y_lo.append(lo)
+                y_hi.append(min(hi, max(0.0, 100.0 - m)))
+            ax_rate.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
+                             markersize=3, capsize=2, linewidth=1.2,
+                             label=label, **plot_kwargs)
+
+            # Latency (ms) — only if tool reports it
+            has_latency = any(
+                r.get("avg_latency_s") is not None
+                for rows in svc_qps.values() for r in rows
+            )
+            if has_latency:
+                y_med, y_lo, y_hi = [], [], []
+                for qps in x_vals:
+                    lats = [r["avg_latency_s"] * 1000 for r in svc_qps[qps]
+                            if r.get("avg_latency_s") is not None]
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax_lat.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
+                                markersize=3, capsize=2, linewidth=1.2,
+                                label=label, **plot_kwargs)
+
+            # Queries Sent vs Answers Received
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
+            for qps in x_vals:
+                ms, slo, shi = _trial_median_p1_p99(svc_qps[qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(svc_qps[qps], "queries_completed")
+                sent_med.append(ms); sent_lo.append(slo); sent_hi.append(shi)
+                comp_med.append(mc); comp_lo.append(clo); comp_hi.append(chi)
+            ax_qc.errorbar(sent_med, comp_med,
+                           xerr=[sent_lo, sent_hi],
+                           yerr=[comp_lo, comp_hi],
+                           markersize=3, capsize=2, linewidth=1.2,
+                           label=label, **plot_kwargs)
+            all_sent_vals.extend(sent_med)
+
+            # Resources (bottom row)
+            for ax, key in ((ax_cpu, "cpu_totl_median_pct"),
+                            (ax_mem, "mem_used_median_mb"),
+                            (ax_net, "net_kb_median_kbps")):
+                xs, meds, lo_errs, hi_errs = [], [], [], []
+                for qps in x_vals:
+                    rows = [r for r in svc_qps[qps] if r.get(key) is not None]
+                    if not rows:
+                        continue
+                    m, lo, hi = _trial_median_p1_p99(rows, key)
+                    xs.append(qps); meds.append(m); lo_errs.append(lo); hi_errs.append(hi)
+                if xs:
+                    if key.endswith("_pct"):
+                        hi_errs = [min(h, max(0.0, 100.0 - m)) for h, m in zip(hi_errs, meds)]
+                    ax.errorbar(xs, meds, yerr=[lo_errs, hi_errs],
+                                markersize=3, capsize=2, linewidth=1.2,
+                                label=label, **plot_kwargs)
+
+    # Top-row formatting
+    ax_rate.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8,
+                    label="99.99% threshold")
+    ax_rate.set_xlabel("Target QPS", fontsize=14)
+    ax_rate.set_ylabel("Answer Rate (%)", fontsize=14)
+    ax_rate.set_title("Answer Rate", fontsize=14, fontweight="bold")
+    ax_rate.set_ylim(bottom=max(0, ax_rate.get_ylim()[0]), top=101)
+    ax_rate.grid(True, alpha=0.3)
+    ax_rate.tick_params(labelsize=14)
+    ax_rate.xaxis.get_offset_text().set_fontsize(14)
+    ax_rate.yaxis.get_offset_text().set_fontsize(14)
+
+    ax_lat.set_xlabel("Target QPS", fontsize=14)
+    ax_lat.set_ylabel("Avg Latency (ms)", fontsize=14)
+    ax_lat.set_title("Average Latency", fontsize=14, fontweight="bold")
+    ax_lat.grid(True, alpha=0.3)
+    ax_lat.tick_params(labelsize=14)
+    ax_lat.xaxis.get_offset_text().set_fontsize(14)
+    ax_lat.yaxis.get_offset_text().set_fontsize(14)
+    if not ax_lat.has_data():
+        ax_lat.text(0.5, 0.5, "No latency data", ha="center", va="center",
+                    transform=ax_lat.transAxes, fontsize=14, color="gray")
+
+    if all_sent_vals:
+        lo, hi = min(all_sent_vals), max(all_sent_vals)
+        ax_qc.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5,
+                   linewidth=0.8, label="Ideal")
+    ax_qc.set_xlabel("Queries Sent", fontsize=14)
+    ax_qc.set_ylabel("Answers Received", fontsize=14)
+    ax_qc.set_title("Queries Sent vs Answers Received", fontsize=14, fontweight="bold")
+    ax_qc.grid(True, alpha=0.3)
+    ax_qc.tick_params(labelsize=14)
+    ax_qc.xaxis.get_offset_text().set_fontsize(14)
+    ax_qc.yaxis.get_offset_text().set_fontsize(14)
+
+    # Bottom-row formatting
+    for ax, ylabel, title in (
+        (ax_cpu, "CPU Total (%)", "CPU Total"),
+        (ax_mem, "RAM Used (MB)", "RAM Used"),
+        (ax_net, "Net KB/s",      "Net KB/s"),
+    ):
+        ax.set_xlabel("Target QPS", fontsize=14)
+        ax.set_ylabel(ylabel, fontsize=14)
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=14)
+        ax.xaxis.get_offset_text().set_fontsize(14)
+        ax.yaxis.get_offset_text().set_fontsize(14)
+
+    # Shared legend across all six panels
+    seen = {}
+    for row_axes in axes:
+        for ax in row_axes:
+            for handle, label in zip(*ax.get_legend_handles_labels()):
+                if label not in seen:
+                    seen[label] = handle
+    if seen:
+        ncol = min(len(seen), 4)
+        fig.legend(
+            seen.values(), seen.keys(),
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=ncol,
+            fontsize=12,
+            frameon=False,
+        )
+
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
+    path = os.path.join(output_dir, "all_services_combined_full.pdf")
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
