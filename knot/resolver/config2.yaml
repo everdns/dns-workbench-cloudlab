@@ -1,3 +1,4 @@
+workers: auto
 network:
   listen:
     - interface: 10.10.1.1@53
