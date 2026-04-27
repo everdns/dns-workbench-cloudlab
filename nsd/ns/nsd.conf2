@@ -4,6 +4,8 @@ server:
 	ip-address: 127.0.0.1
 	zonesdir: "/etc/nsd/"
 	pidfile: "/var/run/nsd.pid"
+	server-count: 40
+    reuseport: yes
 
 zone:
 	name: "workbench.lan"
