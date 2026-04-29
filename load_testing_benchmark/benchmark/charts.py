@@ -751,8 +751,9 @@ def _plot_load_impact_grid(results, all_tools, output_dir):
             loc="lower center",
             bbox_to_anchor=(0.5, -0.02),
             ncol=ncol,
-            fontsize=13,
+            prop={"size": 14, "weight": "bold"},
             frameon=False,
+            columnspacing=0.4,
         )
 
     fig.tight_layout(rect=[0, 0.04, 1, 1])
