@@ -615,6 +615,9 @@ def plot_load_impact(results, output_dir):
     # --- Combined 2x3: metrics (top) + resources (bottom), all services overlaid ---
     _plot_load_impact_combined_full(results, output_dir)
 
+    # --- Per-service Net RX/TX breakdown (1x2 per service) ---
+    _plot_load_impact_net_breakdown(results, all_tools, output_dir)
+
     # --- 99.99% Threshold Summary Table ---
     _generate_threshold_summary(results, output_dir)
 
@@ -1077,7 +1080,7 @@ def _plot_load_impact_combined_full(results, output_dir):
             loc="lower center",
             bbox_to_anchor=(0.5, -0.02),
             ncol=ncol,
-            fontsize=12,
+            fontsize=14,
             frameon=False,
         )
 
@@ -1131,9 +1134,11 @@ COLLECTL_METRICS = [
     ("mem_tot",    "mem_tot_median_mb",    "mem_tot_peak_mb",    "Mem Total (MB)",  "mem"),
     ("mem_free",   "mem_free_median_mb",   "mem_free_peak_mb",   "Mem Free (MB)",   "mem"),
     ("mem_cached", "mem_cached_median_mb", "mem_cached_peak_mb", "Mem Cached (MB)", "mem"),
-    ("net_kb",     "net_kb_median_kbps",   "net_kb_peak_kbps",   "Net KB/s",        "net"),
-    ("net_rx_pkt", "net_rx_pkt_median",    "net_rx_pkt_peak",    "Net Rx Pkt/s",    "net"),
-    ("net_tx_pkt", "net_tx_pkt_median",    "net_tx_pkt_peak",    "Net Tx Pkt/s",    "net"),
+    ("net_kb",     "net_kb_median_kbps",    "net_kb_peak_kbps",    "Net KB/s",        "net"),
+    ("net_rx_kb",  "net_rx_kb_median_kbps", "net_rx_kb_peak_kbps", "Net RX KB/s",     "net"),
+    ("net_tx_kb",  "net_tx_kb_median_kbps", "net_tx_kb_peak_kbps", "Net TX KB/s",     "net"),
+    ("net_rx_pkt", "net_rx_pkt_median",     "net_rx_pkt_peak",     "Net Rx Pkt/s",    "net"),
+    ("net_tx_pkt", "net_tx_pkt_median",     "net_tx_pkt_peak",     "Net Tx Pkt/s",    "net"),
 ]
 
 # Shared service palette (matches _plot_load_impact_combined). 5 hues, enough for <=5 DNS services.
@@ -1176,6 +1181,77 @@ def _all_services_panel(ax, by_tool_svc_qps, median_key, svc_color, tool_marker,
     ax.set_xlabel("Target QPS")
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
+
+
+def _plot_load_impact_net_breakdown(results, all_tools, output_dir):
+    """One 1x2 figure per DNS service: Net RX KB/s (left) and Net TX KB/s (right).
+
+    Saved as `{dns_service}_net_breakdown.pdf` per service. Skips silently if
+    the new keys are absent (e.g., older CSVs without the split columns).
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    rx_key = "net_rx_kb_median_kbps"
+    tx_key = "net_tx_kb_median_kbps"
+    if not any(r.get(rx_key) is not None or r.get(tx_key) is not None for r in results):
+        return
+
+    dns_services = sorted(set(row["dns_service"] for row in results))
+
+    for dns_service in dns_services:
+        service_results = [r for r in results if r["dns_service"] == dns_service]
+        by_tool_qps = defaultdict(lambda: defaultdict(list))
+        for row in service_results:
+            by_tool_qps[row["tool"]][row["target_qps"]].append(row)
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6), squeeze=False)
+        ax_rx, ax_tx = axes[0][0], axes[0][1]
+
+        for tool in sorted(by_tool_qps.keys()):
+            style = _tool_style(tool, all_tools)
+            x_vals = sorted(by_tool_qps[tool].keys())
+            for ax, key in ((ax_rx, rx_key), (ax_tx, tx_key)):
+                xs, y_med, y_lo, y_hi = [], [], [], []
+                for qps in x_vals:
+                    rows = [r for r in by_tool_qps[tool][qps] if r.get(key) is not None]
+                    if not rows:
+                        continue
+                    m, lo, hi = _trial_median_p1_p99(rows, key)
+                    xs.append(qps); y_med.append(m); y_lo.append(lo); y_hi.append(hi)
+                if xs:
+                    ax.errorbar(xs, y_med, yerr=[y_lo, y_hi], markersize=4,
+                                capsize=3, linewidth=1.5, label=tool, **style)
+
+        ax_rx.set_xlabel("Target QPS", fontsize=14)
+        ax_rx.set_ylabel("Net RX (kbps)", fontsize=14)
+        ax_rx.set_title(f"Net RX KB/s — {dns_service}", fontsize=14, fontweight="bold")
+        ax_rx.grid(True, alpha=0.3)
+        ax_rx.tick_params(labelsize=14)
+
+        ax_tx.set_xlabel("Target QPS", fontsize=14)
+        ax_tx.set_ylabel("Net TX (kbps)", fontsize=14)
+        ax_tx.set_title(f"Net TX KB/s — {dns_service}", fontsize=14, fontweight="bold")
+        ax_tx.grid(True, alpha=0.3)
+        ax_tx.tick_params(labelsize=14)
+
+        seen = {}
+        for ax in (ax_rx, ax_tx):
+            for handle, label in zip(*ax.get_legend_handles_labels()):
+                if label not in seen:
+                    seen[label] = handle
+        if seen:
+            ncol = min(len(seen), 4)
+            fig.legend(
+                seen.values(), seen.keys(),
+                loc="lower center",
+                bbox_to_anchor=(0.5, -0.02),
+                ncol=ncol,
+                fontsize=12,
+                frameon=False,
+            )
+        fig.tight_layout(rect=[0, 0.08, 1, 1])
+        path = os.path.join(output_dir, f"{dns_service}_net_breakdown.pdf")
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
 
 
 def _plot_load_impact_resources(results, all_tools, output_dir):
