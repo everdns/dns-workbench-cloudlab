@@ -144,17 +144,23 @@ def _extract_series(columns, rows):
             series["cpu_totl"] = values
             log.info("Using 100 - [CPU]Idle%% as fallback for cpu_totl")
 
-    # net_kb = RxKBTot + TxKBTot per row
+    # net_kb = RxKBTot + TxKBTot per row; also expose RX and TX separately.
     rx_idx = col_index.get("[NET]RxKBTot")
     tx_idx = col_index.get("[NET]TxKBTot")
     if rx_idx is not None and tx_idx is not None:
-        values = []
+        sum_values, rx_values, tx_values = [], [], []
         for row in rows:
             try:
-                values.append(float(row[rx_idx]) + float(row[tx_idx]))
+                rx = float(row[rx_idx])
+                tx = float(row[tx_idx])
             except (ValueError, IndexError):
                 continue
-        series["net_kb"] = values
+            sum_values.append(rx + tx)
+            rx_values.append(rx)
+            tx_values.append(tx)
+        series["net_kb"] = sum_values
+        series["net_rx_kb"] = rx_values
+        series["net_tx_kb"] = tx_values
     else:
         log.warning("collectl columns [NET]RxKBTot / [NET]TxKBTot not found "
                     "for metric 'net_kb'")
@@ -168,8 +174,8 @@ def _median_peak_keys(metric_id):
         return f"{metric_id}_median_pct", f"{metric_id}_peak_pct"
     if metric_id.startswith("mem_"):
         return f"{metric_id}_median_mb", f"{metric_id}_peak_mb"
-    if metric_id == "net_kb":
-        return "net_kb_median_kbps", "net_kb_peak_kbps"
+    if metric_id in ("net_kb", "net_rx_kb", "net_tx_kb"):
+        return f"{metric_id}_median_kbps", f"{metric_id}_peak_kbps"
     if metric_id in ("net_rx_pkt", "net_tx_pkt"):
         return f"{metric_id}_median", f"{metric_id}_peak"
     return f"{metric_id}_median", f"{metric_id}_peak"
@@ -221,4 +227,8 @@ COLLECTL_KEYS = []
 for _mid, _col, _conv, _suffix in _SINGLE_COLUMN_METRICS:
     _mk, _pk = _median_peak_keys(_mid)
     COLLECTL_KEYS.extend([_mk, _pk])
-COLLECTL_KEYS.extend(["net_kb_median_kbps", "net_kb_peak_kbps"])
+COLLECTL_KEYS.extend([
+    "net_kb_median_kbps", "net_kb_peak_kbps",
+    "net_rx_kb_median_kbps", "net_rx_kb_peak_kbps",
+    "net_tx_kb_median_kbps", "net_tx_kb_peak_kbps",
+])
