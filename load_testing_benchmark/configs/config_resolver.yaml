@@ -6,7 +6,7 @@ server_interface: enp94s0f0np0
 client_interface: enp94s0f0np0
 
 input_files:
-  dnsperf: /local/repository/dnsperf_input2
+  dnsperf: /local/repository/dnsperf_input
   dnspyre: /local/repository/dnspyre_input
 
 dns_responder:
@@ -23,7 +23,7 @@ dns_services:
     - knot-resolver
     - unbound-resolver
 
-threads: 20
+threads: 32
 dnspyre_workers: 600
 ports_per_thread: 30
 timeout: 1
