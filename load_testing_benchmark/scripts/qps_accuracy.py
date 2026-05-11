@@ -101,14 +101,20 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
         resp_result = parse_dns_responder_output(resp_text)
 
         # Save timestamps and compute accuracy
-        ts_dest = os.path.join(
-            store.output_dir, script_name, "timestamps",
-            f"{tool.name}_{qps}qps_trial{trial}_timestamps.txt",
-        )
-        os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
-        os.rename(ts_path, ts_dest)
+        #ts_dest = os.path.join(
+        #    store.output_dir, script_name, "timestamps",
+        #    f"{tool.name}_{qps}qps_trial{trial}_timestamps.txt",
+        #)
+        #os.makedirs(os.path.dirname(ts_dest), exist_ok=True)
+        #os.rename(ts_path, ts_dest)
+        #timestamps = read_timestamps_file(ts_dest)
 
-        timestamps = read_timestamps_file(ts_dest)
+        try:
+            timestamps = read_timestamps_file(ts_path)
+        finally:
+            if os.path.exists(ts_path):
+                os.remove(ts_path)
+
         actual_runtime_ns = compute_actual_runtime(timestamps)
         log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
         accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"], crop_s=crop_s)
