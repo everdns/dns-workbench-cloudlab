@@ -40,13 +40,13 @@ script1:
   start_qps: 100000
   qps_step: 100000
   max_qps: 3000000
-  trials: 3
+  trials: 20
 
 script2:
   accuracy_min_qps: 100000
   accuracy_max_qps: 1000000
   accuracy_step: 50000
-  trials: 3
+  trials: 20
 
 script3:
   warmup_cache: false
@@ -56,7 +56,7 @@ script3:
   min_qps:  100000
   max_qps: 3000000
   qps_step: 100000
-  trials: 3
+  trials: 20
   # Optional per-tool max QPS overrides (falls back to max_qps above)
   tool_max_qps:
     dnsperf: 1500000
