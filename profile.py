@@ -21,6 +21,9 @@ pc.defineParameter("num_testers", "Number of Test VMs", portal.ParameterType.INT
 pc.defineParameter("multiple_resolver_iface", "Seperate AS Interface", portal.ParameterType.BOOLEAN, False)
 pc.defineParameter("resolver_software", "Software To Use on Resolver", portal.ParameterType.STRING, "none", ["bind", "powerdns-recursor", "unbound", "knot-resolver", "all", "none"])
 pc.defineParameter("name_server_software", "Software To Use on Name Server", portal.ParameterType.STRING, "none", ["bind", "powerdns-authoritative-server", "knotdns", "nsd", "unbound", "all", "none"])
+pc.defineParameter("resolver_hardware", "Hardware for Resolver", portal.ParameterType.STRING, "any")
+pc.defineParameter("name_server_hardware", "Hardware for Name Server", portal.ParameterType.STRING, "any")
+pc.defineParameter("tester_hardware", "Hardware for test hosts", portal.ParameterType.STRING, "any")
 pc.defineParameter("allow_interswitch_links", "Allow Interswitch Links", portal.ParameterType.BOOLEAN, False)
 # Create a Request object to start building the RSpec.
 request = pc.makeRequestRSpec()
@@ -35,6 +38,8 @@ portal.context.verifyParameters()
 
 # Node Resolver
 node_Resolver = request.RawPC('Resolver')
+if params.resolver_hardware != "any":
+    node_Resolver.hardware_type = params.resolver_hardware
 resolver_base_ip = str(next_ip)
 next_ip += 1
 iface_resolver1 = node_Resolver.addInterface('interface-resolver1', pg.IPv4Address(resolver_base_ip,TEST_HOST_SUBNET_MASK))
@@ -43,6 +48,8 @@ node_Resolver.addService(pg.Execute('/bin/sh','sudo ufw allow 53/tcp && sudo ufw
 
 # Node NS_Local
 node_NS_Local = request.RawPC('NS_Local')
+if params.name_server_hardware != "any":
+    node_NS_Local.hardware_type = params.name_server_hardware
 node_NS_Local.addService(pg.Execute('/bin/sh','sudo apt update -y && sudo apt upgrade -y'))
 node_NS_Local.addService(pg.Execute('/bin/sh','sudo ufw allow 53/tcp && sudo ufw allow 53/udp && sudo ufw allow 853/tcp && sudo ufw allow 443/tcp'))
 
@@ -138,6 +145,8 @@ node_Resolver.addService(pg.Execute('sh','/local/repository/tool_install/install
 
 for i in range(params.num_testers):
     node = request.RawPC("test_host_" + str(i))
+    if params.tester_hardware != "any":
+        node.hardware_type = params.tester_hardware
     node.addService(pg.Execute('sh','/local/repository/load_tester/install.sh'))
     iface = node.addInterface("interface-tester" + str(i), pg.IPv4Address(str(next_ip),TEST_HOST_SUBNET_MASK))
     next_ip += 1
