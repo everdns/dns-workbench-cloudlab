@@ -8,3 +8,4 @@ IFACE_FLAG=${1:-false}
 /local/repository/resolver_software/powerdns/install.sh "$IFACE_FLAG"
 /local/repository/resolver_software/knot/install.sh "$IFACE_FLAG"
 /local/repository/resolver_software/unbound/install.sh "$IFACE_FLAG"
+/local/repository/dns_responder/install.sh
