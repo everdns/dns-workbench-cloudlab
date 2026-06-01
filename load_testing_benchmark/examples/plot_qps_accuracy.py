@@ -206,7 +206,7 @@ def main():
     log.info("Tools: %s, Intervals: %s", tools_found, intervals_found)
 
     plot_qps_accuracy(results, args.output_dir)
-    plot_pps_accuracy(results, args.output_dir)
+    #plot_pps_accuracy(results, args.output_dir)
     log.info("Charts saved to %s", args.output_dir)
 
 

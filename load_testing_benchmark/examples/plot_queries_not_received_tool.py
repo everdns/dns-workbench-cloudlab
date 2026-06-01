@@ -54,7 +54,7 @@ def plot_queries_not_received_tool(results, output_dir):
 
     all_tools = sorted(by_tool_qps.keys())
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     for tool in all_tools:
         style = _tool_style(tool, all_tools)
@@ -71,8 +71,8 @@ def plot_queries_not_received_tool(results, output_dir):
                     capsize=3, linewidth=1.5, label=tool, **style)
 
     ax.set_xlabel("Requested QPS")
-    ax.set_ylabel("Replies Dropped by Tool Per Second")
-    ax.legend(loc="upper left", frameon=False)
+    ax.set_ylabel("Replies Dropped/s")
+    #ax.legend(loc="upper left", frameon=False)
     ax.grid(True, alpha=0.3)
 
     path = os.path.join(output_dir, "replies_dropped_by_tool_per_sec.pdf")
