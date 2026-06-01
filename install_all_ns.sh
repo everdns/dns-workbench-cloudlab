@@ -9,3 +9,4 @@ IFACE_FLAG=${1:-false}
 /local/repository/knot/ns/install.sh "$IFACE_FLAG"
 /local/repository/nsd/ns/install.sh "$IFACE_FLAG"
 /local/repository/unbound/ns/install.sh "$IFACE_FLAG"
+/local/repository/dns_responder/install.sh

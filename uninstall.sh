@@ -1,25 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 
-#Stop dns services before uninstalling packages and files
-sudo sh ./stop_dns_service.sh
+# Stop and uninstall all DNS software from the current node.
+# Each per-role script stops its service before removing its package/build.
 
-# Remove nsd files installed by nsd/ns/install.sh
-sudo make -C /opt/nsd-4.14.1 uninstall 2>/dev/null
-sudo rm -f /usr/local/sbin/nsd /usr/local/sbin/nsd-checkconf /usr/local/sbin/nsd-checkzone /usr/local/sbin/nsd-control
-sudo rm -rf /opt/nsd-4.14.1.tar.gz /opt/nsd-4.14.1 /etc/nsd /var/run /var/db/nsd/xfrd.state /var/db/nsd/zone.list /var/db/nsd/cookiesecrets.txt
-
-#Remove unbound files installed by unbound/resolver/install.sh
-sudo make -C /opt/unbound-1.24.2 uninstall 2>/dev/null
-sudo rm -rf /usr/local/etc/unbound
-sudo rm -rf /opt/unbound-1.24.2.tar.gz /opt/unbound-1.24.2
-
-for pkg in bind9 bind9-utils pdns-server pdns-recursor knot-resolver6 knot; do
-    if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
-        echo "Removing $pkg..."
-        sudo apt-get remove --purge "$pkg" -y
-    else
-        echo "$pkg is not installed, skipping."
-    fi
+for role in bind/ns bind/resolver powerdns/ns powerdns/resolver \
+            knot/ns knot/resolver nsd/ns unbound/ns unbound/resolver; do
+    /local/repository/$role/uninstall.sh
 done
 
 echo "Done."
