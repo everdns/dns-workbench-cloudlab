@@ -7,16 +7,16 @@ fi
 
 case "$1" in
     bind-resolver)
-        /local/repository/bind/resolver/clear_cache.sh
+        /local/repository/resolver_software/bind/clear_cache.sh
         ;;
     powerdns-resolver)
-        /local/repository/powerdns/resolver/clear_cache.sh
+        /local/repository/resolver_software/powerdns/clear_cache.sh
         ;;
     knot-resolver)
-        /local/repository/knot/resolver/clear_cache.sh
+        /local/repository/resolver_software/knot/clear_cache.sh
         ;;
     unbound-resolver)
-        /local/repository/unbound/resolver/clear_cache.sh
+        /local/repository/resolver_software/unbound/clear_cache.sh
         ;;
     *)
         echo "Unknown software: $1"

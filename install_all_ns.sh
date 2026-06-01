@@ -4,9 +4,9 @@
 
 IFACE_FLAG=${1:-false}
 
-/local/repository/bind/ns/install.sh "$IFACE_FLAG"
-/local/repository/powerdns/ns/install.sh "$IFACE_FLAG"
-/local/repository/knot/ns/install.sh "$IFACE_FLAG"
-/local/repository/nsd/ns/install.sh "$IFACE_FLAG"
-/local/repository/unbound/ns/install.sh "$IFACE_FLAG"
+/local/repository/ns_software/bind/install.sh "$IFACE_FLAG"
+/local/repository/ns_software/powerdns/install.sh "$IFACE_FLAG"
+/local/repository/ns_software/knot/install.sh "$IFACE_FLAG"
+/local/repository/ns_software/nsd/install.sh "$IFACE_FLAG"
+/local/repository/ns_software/unbound/install.sh "$IFACE_FLAG"
 /local/repository/dns_responder/install.sh

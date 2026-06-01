@@ -7,8 +7,8 @@ sudo apt-get update
 sudo systemctl mask pdns-recursor
 sudo apt-get install pdns-recursor -y
 if [ "$MULTIPLE_IFACE" = true ]; then
-    sudo cp /local/repository/powerdns/resolver/recursor2.conf /etc/powerdns/recursor.conf
+    sudo cp /local/repository/resolver_software/powerdns/recursor2.conf /etc/powerdns/recursor.conf
 else
-    sudo cp /local/repository/powerdns/resolver/recursor.conf /etc/powerdns/recursor.conf
+    sudo cp /local/repository/resolver_software/powerdns/recursor.conf /etc/powerdns/recursor.conf
 fi
 sudo systemctl unmask pdns-recursor

@@ -84,57 +84,57 @@ else:
 iface_flag = "true" if params.multiple_resolver_iface else "false"
 #Bind Resolver
 if params.resolver_software == "bind":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/start.sh'))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/bind/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/bind/start.sh'))
 #PowerDNS Resolver
 elif params.resolver_software == "powerdns-recursor":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/start.sh'))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/powerdns/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/powerdns/start.sh'))
 #Knot Resolver
 elif params.resolver_software == "knot-resolver":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/start.sh'))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/knot/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/knot/start.sh'))
 #Unbound Resolver
 elif params.resolver_software == "unbound":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/unbound/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/unbound/resolver/start.sh'))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/unbound/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/unbound/start.sh'))
 #All Resolver Software (install only, no start)
 elif params.resolver_software == "all":
-    node_Resolver.addService(pg.Execute('sh','/local/repository/bind/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/powerdns/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/knot/resolver/install.sh ' + iface_flag))
-    node_Resolver.addService(pg.Execute('sh','/local/repository/unbound/resolver/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/bind/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/powerdns/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/knot/install.sh ' + iface_flag))
+    node_Resolver.addService(pg.Execute('sh','/local/repository/resolver_software/unbound/install.sh ' + iface_flag))
 #None or unimplemented resolver software
 else:
     node_Resolver.addService(pg.Execute('/bin/sh','echo "None selected or Resolver software installation not implemented yet" > /tmp/resolver_software_selection.txt'))
 
 #Bind Name Server
 if params.name_server_software == "bind":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/start.sh'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/bind/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/bind/start.sh'))
 #PowerDNS Name Server
 elif params.name_server_software == "powerdns-authoritative-server":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/start.sh'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/powerdns/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/powerdns/start.sh'))
 #KnotDNS Name Server
 elif params.name_server_software == "knotdns":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/start.sh'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/knot/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/knot/start.sh'))
 #NSD Name Server
 elif params.name_server_software == "nsd":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/start.sh'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/nsd/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/nsd/start.sh'))
 #Unbound Name Server
 elif params.name_server_software == "unbound":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/start.sh'))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/unbound/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/unbound/start.sh'))
 #All Name Server Software (install only, no start)
 elif params.name_server_software == "all":
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/bind/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/powerdns/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/knot/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/nsd/ns/install.sh ' + iface_flag))
-    node_NS_Local.addService(pg.Execute('sh','/local/repository/unbound/ns/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/bind/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/powerdns/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/knot/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/nsd/install.sh ' + iface_flag))
+    node_NS_Local.addService(pg.Execute('sh','/local/repository/ns_software/unbound/install.sh ' + iface_flag))
 #None or unimplemented name server software
 else:
     node_NS_Local.addService(pg.Execute('/bin/sh','echo "None selected or Name Server software installation not implemented yet" > /tmp/name_server_software_selection.txt'))

@@ -5,9 +5,9 @@ sudo wget https://nlnetlabs.nl/downloads/unbound/unbound-1.24.2.tar.gz -O /opt/u
 sudo tar -xzf /opt/unbound-1.24.2.tar.gz -C /opt
 cd /opt/unbound-1.24.2 && sudo ./configure --with-libevent && sudo make && sudo make install && sudo ldconfig
 sudo /usr/local/sbin/unbound-anchor -a /usr/local/etc/unbound/root.key || true
-sudo cp /local/repository/unbound/resolver/unbound.conf /usr/local/etc/unbound/unbound.conf
+sudo cp /local/repository/resolver_software/unbound/unbound.conf /usr/local/etc/unbound/unbound.conf
 if [ "$MULTIPLE_IFACE" = true ]; then
-    sudo cp /local/repository/unbound/resolver/forward2.conf /usr/local/etc/unbound/forward.conf
+    sudo cp /local/repository/resolver_software/unbound/forward2.conf /usr/local/etc/unbound/forward.conf
 else
-    sudo cp /local/repository/unbound/resolver/forward.conf /usr/local/etc/unbound/forward.conf
+    sudo cp /local/repository/resolver_software/unbound/forward.conf /usr/local/etc/unbound/forward.conf
 fi

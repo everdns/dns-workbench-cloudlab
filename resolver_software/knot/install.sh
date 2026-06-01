@@ -8,8 +8,8 @@ sudo apt-get update -y
 sudo systemctl mask knot-resolver
 sudo apt-get install knot-resolver6 -y
 if [ "$MULTIPLE_IFACE" = true ]; then
-    sudo cp /local/repository/knot/resolver/config2.yaml /etc/knot-resolver/config.yaml
+    sudo cp /local/repository/resolver_software/knot/config2.yaml /etc/knot-resolver/config.yaml
 else
-    sudo cp /local/repository/knot/resolver/config.yaml /etc/knot-resolver/config.yaml
+    sudo cp /local/repository/resolver_software/knot/config.yaml /etc/knot-resolver/config.yaml
 fi
 sudo systemctl unmask knot-resolver

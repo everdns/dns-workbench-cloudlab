@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stop and uninstall Knot Resolver
-/local/repository/knot/resolver/stop.sh
+/local/repository/resolver_software/knot/stop.sh
 
 if dpkg -l knot-resolver6 2>/dev/null | grep -q "^ii"; then
     echo "Removing knot-resolver6..."

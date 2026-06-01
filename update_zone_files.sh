@@ -22,7 +22,7 @@ echo ""
 # Delegate to each authoritative software's update_zone.sh. Each script
 # detects whether its software is installed and skips if not.
 for sw in bind knot powerdns nsd unbound; do
-    /local/repository/$sw/ns/update_zone.sh "$ZONE_FILE"
+    /local/repository/ns_software/$sw/update_zone.sh "$ZONE_FILE"
 done
 
 echo ""

@@ -6,9 +6,9 @@ sudo apt install -y build-essential libssl-dev libevent-dev bison flex
 sudo apt install -y protobuf-c-compiler libprotobuf-c-dev libfstrm-dev
 cd /opt/nsd-4.14.1 && sudo ./configure && sudo make && sudo make install
 if [ "$MULTIPLE_IFACE" = true ]; then
-    sudo cp /local/repository/nsd/ns/nsd.conf2 /etc/nsd/nsd.conf
+    sudo cp /local/repository/ns_software/nsd/nsd.conf2 /etc/nsd/nsd.conf
 else
-    sudo cp /local/repository/nsd/ns/nsd.conf /etc/nsd/nsd.conf
+    sudo cp /local/repository/ns_software/nsd/nsd.conf /etc/nsd/nsd.conf
 fi
 sudo cp /local/repository/zone_file_defaults/db.workbench.lan /etc/nsd/db.workbench.lan
 sudo cp /local/repository/zone_file_defaults/db.dns64perf.test /etc/nsd/db.dns64perf.test

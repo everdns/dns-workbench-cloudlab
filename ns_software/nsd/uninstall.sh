@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stop and uninstall NSD (authoritative name server, compiled from source)
-/local/repository/nsd/ns/stop.sh
+/local/repository/ns_software/nsd/stop.sh
 
 # Remove nsd files installed by nsd/ns/install.sh
 sudo make -C /opt/nsd-4.14.1 uninstall 2>/dev/null

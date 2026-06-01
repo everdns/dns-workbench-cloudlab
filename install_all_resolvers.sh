@@ -4,7 +4,7 @@
 
 IFACE_FLAG=${1:-false}
 
-/local/repository/bind/resolver/install.sh "$IFACE_FLAG"
-/local/repository/powerdns/resolver/install.sh "$IFACE_FLAG"
-/local/repository/knot/resolver/install.sh "$IFACE_FLAG"
-/local/repository/unbound/resolver/install.sh "$IFACE_FLAG"
+/local/repository/resolver_software/bind/install.sh "$IFACE_FLAG"
+/local/repository/resolver_software/powerdns/install.sh "$IFACE_FLAG"
+/local/repository/resolver_software/knot/install.sh "$IFACE_FLAG"
+/local/repository/resolver_software/unbound/install.sh "$IFACE_FLAG"

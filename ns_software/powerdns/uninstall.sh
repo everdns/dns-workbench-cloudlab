@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stop and uninstall PowerDNS Authoritative Server
-/local/repository/powerdns/ns/stop.sh
+/local/repository/ns_software/powerdns/stop.sh
 
 if dpkg -l pdns-server 2>/dev/null | grep -q "^ii"; then
     echo "Removing pdns-server..."

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stop and uninstall BIND (recursive resolver)
-/local/repository/bind/resolver/stop.sh
+/local/repository/resolver_software/bind/stop.sh
 
 for pkg in bind9 bind9-utils bind9-dnsutils; do
     if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then

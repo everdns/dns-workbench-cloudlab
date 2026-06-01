@@ -5,8 +5,8 @@
 # If no argument is given, stop all services
 
 stop_all() {
-    for role in bind/ns bind/resolver powerdns/ns powerdns/resolver \
-                knot/ns knot/resolver nsd/ns unbound/ns unbound/resolver; do
+    for role in ns_software/bind resolver_software/bind ns_software/powerdns resolver_software/powerdns \
+                ns_software/knot resolver_software/knot ns_software/nsd ns_software/unbound resolver_software/unbound; do
         /local/repository/$role/stop.sh
     done
 }
@@ -18,31 +18,31 @@ fi
 
 case "$1" in
     bind-resolver)
-        /local/repository/bind/resolver/stop.sh
+        /local/repository/resolver_software/bind/stop.sh
         ;;
     bind-ns)
-        /local/repository/bind/ns/stop.sh
+        /local/repository/ns_software/bind/stop.sh
         ;;
     powerdns-resolver)
-        /local/repository/powerdns/resolver/stop.sh
+        /local/repository/resolver_software/powerdns/stop.sh
         ;;
     powerdns-ns)
-        /local/repository/powerdns/ns/stop.sh
+        /local/repository/ns_software/powerdns/stop.sh
         ;;
     knot-resolver)
-        /local/repository/knot/resolver/stop.sh
+        /local/repository/resolver_software/knot/stop.sh
         ;;
     knot-ns)
-        /local/repository/knot/ns/stop.sh
+        /local/repository/ns_software/knot/stop.sh
         ;;
     nsd-ns)
-        /local/repository/nsd/ns/stop.sh
+        /local/repository/ns_software/nsd/stop.sh
         ;;
     unbound-resolver)
-        /local/repository/unbound/resolver/stop.sh
+        /local/repository/resolver_software/unbound/stop.sh
         ;;
     unbound-ns)
-        /local/repository/unbound/ns/stop.sh
+        /local/repository/ns_software/unbound/stop.sh
         ;;
     *)
         echo "Unknown software: $1"

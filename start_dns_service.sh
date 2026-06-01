@@ -7,31 +7,31 @@ fi
 
 case "$1" in
     bind-resolver)
-        /local/repository/bind/resolver/start.sh
+        /local/repository/resolver_software/bind/start.sh
         ;;
     bind-ns)
-        /local/repository/bind/ns/start.sh
+        /local/repository/ns_software/bind/start.sh
         ;;
     powerdns-resolver)
-        /local/repository/powerdns/resolver/start.sh
+        /local/repository/resolver_software/powerdns/start.sh
         ;;
     powerdns-ns)
-        /local/repository/powerdns/ns/start.sh
+        /local/repository/ns_software/powerdns/start.sh
         ;;
     knot-resolver)
-        /local/repository/knot/resolver/start.sh
+        /local/repository/resolver_software/knot/start.sh
         ;;
     knot-ns)
-        /local/repository/knot/ns/start.sh
+        /local/repository/ns_software/knot/start.sh
         ;;
     nsd-ns)
-        /local/repository/nsd/ns/start.sh
+        /local/repository/ns_software/nsd/start.sh
         ;;
     unbound-resolver)
-        /local/repository/unbound/resolver/start.sh
+        /local/repository/resolver_software/unbound/start.sh
         ;;
     unbound-ns)
-        /local/repository/unbound/ns/start.sh
+        /local/repository/ns_software/unbound/start.sh
         ;;
     *)
         echo "Unknown software: $1"

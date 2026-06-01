@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stop and uninstall PowerDNS Recursor
-/local/repository/powerdns/resolver/stop.sh
+/local/repository/resolver_software/powerdns/stop.sh
 
 if dpkg -l pdns-recursor 2>/dev/null | grep -q "^ii"; then
     echo "Removing pdns-recursor..."
