@@ -8,20 +8,27 @@ import yaml
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 log = logging.getLogger(__name__)
 
-def _interval_sort_key(label):
-    """Sort interval labels by numeric timescale (e.g. 10ms < 100ms < 1s)."""
-    import re
-    m = re.match(r"(\d+)(ns|ms|s)", label)
-    if not m:
-        return float("inf")
-    val = int(m.group(1))
-    unit = m.group(2)
-    multipliers = {"ns": 1, "ms": 1_000_000, "s": 1_000_000_000}
-    return val * multipliers.get(unit, float("inf"))
+COLLECTL_METRICS = [
+    ("cpu_totl",   "cpu_totl_median_pct",  "cpu_totl_peak_pct",  "CPU Total %",     "cpu"),
+    ("cpu_user",   "cpu_user_median_pct",  "cpu_user_peak_pct",  "CPU User %",      "cpu"),
+    ("cpu_sys",    "cpu_sys_median_pct",   "cpu_sys_peak_pct",   "CPU Sys %",       "cpu"),
+    ("mem_used",   "mem_used_median_mb",   "mem_used_peak_mb",   "Mem Used (MB)",   "mem"),
+    ("mem_tot",    "mem_tot_median_mb",    "mem_tot_peak_mb",    "Mem Total (MB)",  "mem"),
+    ("mem_free",   "mem_free_median_mb",   "mem_free_peak_mb",   "Mem Free (MB)",   "mem"),
+    ("mem_cached", "mem_cached_median_mb", "mem_cached_peak_mb", "Mem Cached (MB)", "mem"),
+    ("net_kb",     "net_kb_median_kbps",    "net_kb_peak_kbps",    "Net KB/s",        "net"),
+    ("net_rx_kb",  "net_rx_kb_median_kbps", "net_rx_kb_peak_kbps", "Net RX KB/s",     "net"),
+    ("net_tx_kb",  "net_tx_kb_median_kbps", "net_tx_kb_peak_kbps", "Net TX KB/s",     "net"),
+    ("net_rx_pkt", "net_rx_pkt_median",     "net_rx_pkt_peak",     "Net Rx Pkt/s",    "net"),
+    ("net_tx_pkt", "net_tx_pkt_median",     "net_tx_pkt_peak",     "Net Tx Pkt/s",    "net"),
+]
 
+# Shared service palette (matches _plot_load_impact_combined). 5 hues, enough for <=5 DNS services.
+COMBINED_SERVICE_COLORS = ["#000000", "#FE6100", "#648FFF", "#DC267F", "#009E73"]
 
 LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2)), (0, (1, 1)), (0, (3, 5, 1, 5)), (0, (5, 1))]
 MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*", "h"]
@@ -54,6 +61,16 @@ if os.path.exists(_CHART_CONFIG_PATH):
         _chart_cfg = yaml.safe_load(_f) or {}
     _TOOL_STYLE_REGISTRY = _chart_cfg.get("tool_styles", {})
 
+def _interval_sort_key(label):
+    """Sort interval labels by numeric timescale (e.g. 10ms < 100ms < 1s)."""
+    import re
+    m = re.match(r"(\d+)(ns|ms|s)", label)
+    if not m:
+        return float("inf")
+    val = int(m.group(1))
+    unit = m.group(2)
+    multipliers = {"ns": 1, "ms": 1_000_000, "s": 1_000_000_000}
+    return val * multipliers.get(unit, float("inf"))
 
 def _tool_style(tool_name, all_tools_sorted):
     """Return a dict of plot kwargs (color, marker, linestyle) for a tool.
@@ -177,27 +194,13 @@ def plot_max_throughput(results, output_dir, legend:bool = True):
 def plot_legend(results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
-    by_tool_qps = defaultdict(lambda: defaultdict(list))
-    for row in results:
-        by_tool_qps[row["tool"]][row["requested_qps"]].append(row)
-    all_tools = sorted(by_tool_qps.keys())
-
-    fig_tmp, ax_tmp = plt.subplots()
-    for tool in all_tools:
-        style = _tool_style(tool, all_tools)
-        x_vals = sorted(by_tool_qps[tool].keys())
-        y_med, y_lo, y_hi = [], [], []
-        for qps in x_vals:
-            m, lo, hi = _trial_median_p1_p99(
-                by_tool_qps[tool][qps], "achieved_qps_responder"
-            )
-            y_med.append(m)
-            y_lo.append(lo)
-            y_hi.append(hi)
-        ax_tmp.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
-                        capsize=3, linewidth=1.5, label=tool, **style)
-    handles, labels = ax_tmp.get_legend_handles_labels()
-    plt.close(fig_tmp)
+    all_tools = sorted({row["tool"] for row in results})
+    handles = [
+        Line2D([], [], markersize=4, linewidth=1.5, label=tool,
+               **_tool_style(tool, all_tools))
+        for tool in all_tools
+    ]
+    labels = all_tools
 
     fig_leg = plt.figure(figsize=(7, 1.2))  # wide, paper-friendly
     fig_leg.legend(
@@ -925,7 +928,6 @@ def _plot_load_impact_combined(results, output_dir):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-
 def _plot_load_impact_combined_full(results, output_dir):
     """2x3 figure merging all_services_combined (top row) with all_services_resources (bottom row).
 
@@ -1108,7 +1110,6 @@ def _plot_load_impact_combined_full(results, output_dir):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-
 def _generate_threshold_summary(results, output_dir):
     """Generate a text summary of the QPS at which each tool falls below 99.99% answer rate."""
     by_service_tool = defaultdict(lambda: defaultdict(list))
@@ -1143,27 +1144,6 @@ def _generate_threshold_summary(results, output_dir):
     with open(path, "w") as f:
         f.write(summary)
 
-
-# metric_id -> (median_csv_key, peak_csv_key, ylabel, category)
-COLLECTL_METRICS = [
-    ("cpu_totl",   "cpu_totl_median_pct",  "cpu_totl_peak_pct",  "CPU Total %",     "cpu"),
-    ("cpu_user",   "cpu_user_median_pct",  "cpu_user_peak_pct",  "CPU User %",      "cpu"),
-    ("cpu_sys",    "cpu_sys_median_pct",   "cpu_sys_peak_pct",   "CPU Sys %",       "cpu"),
-    ("mem_used",   "mem_used_median_mb",   "mem_used_peak_mb",   "Mem Used (MB)",   "mem"),
-    ("mem_tot",    "mem_tot_median_mb",    "mem_tot_peak_mb",    "Mem Total (MB)",  "mem"),
-    ("mem_free",   "mem_free_median_mb",   "mem_free_peak_mb",   "Mem Free (MB)",   "mem"),
-    ("mem_cached", "mem_cached_median_mb", "mem_cached_peak_mb", "Mem Cached (MB)", "mem"),
-    ("net_kb",     "net_kb_median_kbps",    "net_kb_peak_kbps",    "Net KB/s",        "net"),
-    ("net_rx_kb",  "net_rx_kb_median_kbps", "net_rx_kb_peak_kbps", "Net RX KB/s",     "net"),
-    ("net_tx_kb",  "net_tx_kb_median_kbps", "net_tx_kb_peak_kbps", "Net TX KB/s",     "net"),
-    ("net_rx_pkt", "net_rx_pkt_median",     "net_rx_pkt_peak",     "Net Rx Pkt/s",    "net"),
-    ("net_tx_pkt", "net_tx_pkt_median",     "net_tx_pkt_peak",     "Net Tx Pkt/s",    "net"),
-]
-
-# Shared service palette (matches _plot_load_impact_combined). 5 hues, enough for <=5 DNS services.
-COMBINED_SERVICE_COLORS = ["#000000", "#FE6100", "#648FFF", "#DC267F", "#009E73"]
-
-
 def _draw_median(ax, qps_map, median_key, color, marker, label):
     """Draw a median line with p1/p99 error bars across trials for one series onto ax."""
     xs, meds, lo_errs, hi_errs = [], [], [], []
@@ -1179,7 +1159,6 @@ def _draw_median(ax, qps_map, median_key, color, marker, label):
         ax.errorbar(xs, meds, yerr=[lo_errs, hi_errs], markersize=4, capsize=3,
                     linewidth=1.5, color=color, marker=marker, linestyle="-", label=label)
 
-
 # Per-service panel (Figure 2 rows): one color per tool.
 def _per_service_panel(ax, by_tool_qps, median_key, all_tools, ylabel):
     for tool in sorted(by_tool_qps.keys()):
@@ -1189,7 +1168,6 @@ def _per_service_panel(ax, by_tool_qps, median_key, all_tools, ylabel):
     ax.set_xlabel("Target QPS")
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
-
 
 # All-services panel (Figure 1): color = service, marker = tool.
 def _all_services_panel(ax, by_tool_svc_qps, median_key, svc_color, tool_marker, ylabel):
