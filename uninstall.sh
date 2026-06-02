@@ -1,11 +1,25 @@
 #!/bin/sh
+# Stop and uninstall DNS software from the current node.
+# Usage: ./uninstall.sh [<role>_<software>]
+# With no argument, uninstalls every discovered software.
+# Each per-software uninstall.sh stops its service before removing its package/build.
 
-# Stop and uninstall all DNS software from the current node.
-# Each per-role script stops its service before removing its package/build.
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/script_lib.sh"
 
-for role in ns_software/bind resolver_software/bind ns_software/powerdns resolver_software/powerdns \
-            ns_software/knot resolver_software/knot ns_software/nsd ns_software/unbound resolver_software/unbound; do
-    /local/repository/$role/uninstall.sh
-done
+if [ -z "$1" ]; then
+    run_all uninstall.sh
+    echo "Done."
+    exit 0
+fi
 
+target=$(resolve_target "$1" uninstall.sh)
+if [ -z "$target" ]; then
+    echo "Software '$1' does not exist."
+    echo "Available software:"
+    list_available uninstall.sh | sed 's/^/  /'
+    echo "Or run with no argument to uninstall all software."
+    exit 1
+fi
+
+"$target"
 echo "Done."

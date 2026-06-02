@@ -1,41 +1,26 @@
 #!/bin/sh
-if [ -z "$1" ]; then
+# Start a single DNS software service.
+# Usage: start_dns_service.sh <role>_<software>   (e.g. ns_bind, resolver_unbound)
+
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/script_lib.sh"
+
+usage() {
     echo "Usage: $0 <software>"
-    echo "Options: bind-resolver, bind-ns, powerdns-resolver, powerdns-ns, knot-resolver, knot-ns, nsd-ns, unbound-resolver"
+    echo "Available software:"
+    list_available start.sh | sed 's/^/  /'
+}
+
+if [ -z "$1" ]; then
+    usage
     exit 1
 fi
 
-case "$1" in
-    bind-resolver)
-        /local/repository/resolver_software/bind/start.sh
-        ;;
-    bind-ns)
-        /local/repository/ns_software/bind/start.sh
-        ;;
-    powerdns-resolver)
-        /local/repository/resolver_software/powerdns/start.sh
-        ;;
-    powerdns-ns)
-        /local/repository/ns_software/powerdns/start.sh
-        ;;
-    knot-resolver)
-        /local/repository/resolver_software/knot/start.sh
-        ;;
-    knot-ns)
-        /local/repository/ns_software/knot/start.sh
-        ;;
-    nsd-ns)
-        /local/repository/ns_software/nsd/start.sh
-        ;;
-    unbound-resolver)
-        /local/repository/resolver_software/unbound/start.sh
-        ;;
-    unbound-ns)
-        /local/repository/ns_software/unbound/start.sh
-        ;;
-    *)
-        echo "Unknown software: $1"
-        echo "Options: bind-resolver, bind-ns, powerdns-resolver, powerdns-ns, knot-resolver, knot-ns, nsd-ns, unbound-resolver, unbound-ns"
-        exit 1
-        ;;
-esac
+target=$(resolve_target "$1" start.sh)
+if [ -z "$target" ]; then
+    echo "Software '$1' does not exist."
+    echo "Available software:"
+    list_available start.sh | sed 's/^/  /'
+    exit 1
+fi
+
+exec "$target"

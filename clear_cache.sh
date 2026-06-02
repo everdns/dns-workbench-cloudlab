@@ -1,26 +1,23 @@
 #!/bin/sh
+# Clear the cache of a single DNS software service.
+# Usage: clear_cache.sh <role>_<software>   (e.g. resolver_bind)
+# In practice only resolver software has a cache to clear.
+
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/script_lib.sh"
+
 if [ -z "$1" ]; then
     echo "Usage: $0 <software>"
-    echo "Options: bind-resolver, powerdns-resolver, knot-resolver, unbound-resolver"
+    echo "Available software:"
+    list_available clear_cache.sh | sed 's/^/  /'
     exit 1
 fi
 
-case "$1" in
-    bind-resolver)
-        /local/repository/resolver_software/bind/clear_cache.sh
-        ;;
-    powerdns-resolver)
-        /local/repository/resolver_software/powerdns/clear_cache.sh
-        ;;
-    knot-resolver)
-        /local/repository/resolver_software/knot/clear_cache.sh
-        ;;
-    unbound-resolver)
-        /local/repository/resolver_software/unbound/clear_cache.sh
-        ;;
-    *)
-        echo "Unknown software: $1"
-        echo "Options: bind-resolver, powerdns-resolver, knot-resolver, unbound-resolver"
-        exit 1
-        ;;
-esac
+target=$(resolve_target "$1" clear_cache.sh)
+if [ -z "$target" ]; then
+    echo "Software '$1' does not exist."
+    echo "Available software:"
+    list_available clear_cache.sh | sed 's/^/  /'
+    exit 1
+fi
+
+exec "$target"

@@ -110,7 +110,7 @@ Key options:
 --dns-services NAME...  DNS services to test (default: from config.yaml)
 ```
 
-DNS services are managed via `start_dns_service.sh` / `stop_dns_service.sh` on the server host. Available services: `bind-resolver`, `powerdns-resolver`, `knot-resolver`, `nsd-ns`, `unbound-resolver`.
+DNS services are managed via `start_dns_service.sh` / `stop_dns_service.sh` on the server host. Available services: `resolver_bind`, `resolver_powerdns`, `resolver_knot`, `ns_nsd`, `resolver_unbound`.
 
 **Output:** CSV/JSON with latency, answer rate, and QPS data per tool per DNS server, plus comparative charts and a 99.99% answer rate threshold summary.
 

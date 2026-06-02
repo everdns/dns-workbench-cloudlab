@@ -18,8 +18,8 @@ dns_services:
   stop_script: /local/repository/stop_dns_service.sh
   clear_cache_script: /local/repository/clear_cache.sh
   services:
-    - bind-ns
-    - knot-ns
+    - ns_bind
+    - ns_knot
 
 threads: 20
 dnspyre_workers: 600

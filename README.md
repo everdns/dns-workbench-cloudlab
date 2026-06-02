@@ -34,16 +34,22 @@ sudo /local/repository/start_dns_service.sh <software>
 
 Available options:
 
+Options follow the form `<role>_<software>`, where `<role>` is `ns` (authoritative) or
+`resolver`, and `<software>` is a directory name under `ns_software/` or
+`resolver_software/`. The available options are discovered automatically, so running the
+script with no argument (or an unknown one) prints the current list.
+
 | Option | Description |
 |---|---|
-| `bind-resolver` | BIND as a recursive resolver |
-| `bind-ns` | BIND as an authoritative name server |
-| `powerdns-resolver` | PowerDNS Recursor |
-| `powerdns-ns` | PowerDNS Authoritative Server |
-| `knot-resolver` | Knot Resolver |
-| `knot-ns` | Knot DNS (authoritative) |
-| `nsd-ns` | NSD (authoritative) |
-| `unbound-resolver` | Unbound resolver |
+| `resolver_bind` | BIND as a recursive resolver |
+| `ns_bind` | BIND as an authoritative name server |
+| `resolver_powerdns` | PowerDNS Recursor |
+| `ns_powerdns` | PowerDNS Authoritative Server |
+| `resolver_knot` | Knot Resolver |
+| `ns_knot` | Knot DNS (authoritative) |
+| `ns_nsd` | NSD (authoritative) |
+| `resolver_unbound` | Unbound resolver |
+| `ns_unbound` | Unbound (authoritative) |
 
 ## stop_dns_service.sh
 

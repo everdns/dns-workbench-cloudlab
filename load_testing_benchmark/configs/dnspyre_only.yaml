@@ -18,11 +18,11 @@ dns_services:
   stop_script: /local/repository/stop_dns_service.sh
   clear_cache_script: /local/repository/clear_cache.sh
   services:
-    - bind-resolver
-    - powerdns-resolver
-    - knot-resolver
-    - nsd-ns
-    - unbound-resolver
+    - ns_bind
+    - ns_powerdns
+    - ns_knot
+    - ns_nsd
+    - ns_unbound
 
 tools:
   - dnspyre

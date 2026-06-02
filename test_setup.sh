@@ -10,9 +10,9 @@ query against it, and then stopping it again.
 Arguments:
   SERVER_IP     IP address to send dig queries to (default: 10.10.1.2)
   SERVER_TYPE   Which group of servers to test (default: NS)
-                  NS  -> bind-ns, knot-ns, powerdns-ns, nsd-ns, unbound-ns
-                  any other value -> bind-resolver, knot-resolver,
-                                     powerdns-recursor, unbound-resolver
+                  NS  -> every software under ns_software/ (as ns_<sw>)
+                  any other value -> every software under resolver_software/
+                                     (as resolver_<sw>)
 
 Options:
   -h, --help    Show this help message and exit
@@ -32,23 +32,20 @@ fi
 SERVER_IP=${1:-10.10.1.2}
 SERVER_TYPE=${2:-NS}
 
+REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
 if [[ "$SERVER_TYPE" == "NS" ]]; then
-    servers=(
-        bind-ns
-        knot-ns
-        powerdns-ns
-        nsd-ns
-        unbound-ns
-    )
+    role=ns
 else
-    servers=(
-        bind-resolver
-        knot-resolver
-        powerdns-recursor
-        unbound-resolver
-    )
+    role=resolver
 fi
 
+# Discover every software in the chosen tree that can be started.
+servers=()
+for dir in "$REPO_DIR/${role}_software"/*/; do
+    [ -x "${dir}start.sh" ] || continue
+    servers+=("${role}_$(basename "$dir")")
+done
 
 ssh "$SERVER_IP" "bash ./stop_dns_service.sh"
 for server in "${servers[@]}"; do
