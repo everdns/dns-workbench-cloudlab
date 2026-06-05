@@ -1,4 +1,6 @@
 #!/bin/sh
 # Stop NSD (authoritative name server)
-echo "Stopping nsd..."
-sudo pkill nsd 2>/dev/null
+if pgrep -x nsd >/dev/null 2>&1; then
+    echo "Stopping nsd..."
+    sudo pkill nsd 2>/dev/null
+fi
