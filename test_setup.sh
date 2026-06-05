@@ -47,10 +47,10 @@ for dir in "$REPO_DIR/${role}_software"/*/; do
     servers+=("${role}_$(basename "$dir")")
 done
 
-ssh "$SERVER_IP" "bash ./stop_dns_service.sh"
+ssh "$SERVER_IP" "bash /local/repository/stop_dns_service.sh"
 for server in "${servers[@]}"; do
     echo "=== Testing $server ==="
-    ssh "$SERVER_IP" "bash ./start_dns_service.sh '$server'"
+    ssh "$SERVER_IP" "bash /local/repository/start_dns_service.sh '$server'"
     dig @"$SERVER_IP" ns1.workbench.lan
-    ssh "$SERVER_IP" "bash ./stop_dns_service.sh"
+    ssh "$SERVER_IP" "bash /local/repository/stop_dns_service.sh"
 done
