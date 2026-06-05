@@ -69,7 +69,7 @@ Key options:
 --recieve-only      Run dns_responder in receive-only mode (no responses sent)
 ```
 
-**Output:** CSV/JSON with requested vs. achieved QPS per tool, plus a chart. When `--trials N` is used with N > 1, each data point shows mean ± stddev error bars across trials.
+**Output:** CSV/JSON with requested vs. achieved QPS per tool, plus a chart.
 
 ### Script 2: QPS Accuracy Evaluation
 
@@ -108,11 +108,44 @@ Key options:
 --impact-qps-step N     QPS step size (default: 50000)
 --impact-trials N       Trials per test (default: 3)
 --dns-services NAME...  DNS services to test (default: from config.yaml)
+--collectl            Run collectl on the DNS server during each tool invocation and save the trail (disabled by default)
+--no-collectl         Explicitly disable collectl monitoring
 ```
 
-DNS services are managed via `start_dns_service.sh` / `stop_dns_service.sh` on the server host. Available services: `resolver_bind`, `resolver_powerdns`, `resolver_knot`, `ns_nsd`, `resolver_unbound`.
+DNS services are managed via `start_dns_service.sh` / `stop_dns_service.sh` on the server host.
 
 **Output:** CSV/JSON with latency, answer rate, and QPS data per tool per DNS server, plus comparative charts and a 99.99% answer rate threshold summary.
+
+#### Server resource monitoring with collectl
+
+When enabled, the load impact test samples the **DNS server host** with `collectl` during every tool run, so CPU, memory, and network usage can be correlated with the latency/answer-rate results. This makes it possible to tell whether a DNS server is CPU-bound, saturating its NIC, etc., at a given offered QPS.
+
+Enable it in `config.yaml` under `script3`:
+
+```yaml
+script3:
+  collectl: true        # enable per-run collectl sampling on the server
+  collectl_margin: 5    # seconds of warm-up/cool-down padding around each run
+```
+
+How it works:
+
+- For each `(dns_service, tool, qps, trial)` run, `collectl -scndm --plot` is started on the server over SSH for `runtime + 2 * collectl_margin` seconds.
+- The framework waits `collectl_margin` seconds so sampling is warm before the load tool starts, then runs the tool, then collects the trail file back via SCP.
+- During parsing, the first and last `collectl_margin` samples (1 sample/sec) are dropped so only the steady-state window is aggregated.
+- For each metric the **median** and **peak** are recorded. `collectl` runs only on the server host (no client-side agent) and must be installed there.
+
+Metrics captured per run (subsystems `-scndm`: CPU, network, disk, memory):
+
+| Group | Metrics |
+|-------|---------|
+| CPU | total %, user %, sys % |
+| Memory | used, total, free, cached (MB) |
+| Network | RX/TX KB/s (and combined), RX/TX packets/s |
+
+If `collectl` fails to start, isn't installed, or a trail file can't be parsed, the run continues without resource data (a warning is logged) — the latency/answer-rate results are unaffected.
+
+**Output:** the median/peak columns are appended to `results.csv` / `results.json`, raw per-run trail files are saved under `load_impact/collectl/`, and per-service CPU/memory/network resource charts are generated alongside the latency/answer-rate charts.
 
 ## Common Options
 
@@ -126,7 +159,7 @@ All scripts share these flags:
 --tools TOOL [TOOL ...]  Subset of tools to test
 --output-dir DIR         Output directory (default: results/)
 --runtime N              Test duration in seconds (default: 10)
---threads N              Number of threads (default: 20)
+--threads N              Number of threads for load testing tool (default: 20)
 --dns-responder-batch-size N  Batch size for dns_responder (default: from config.yaml)
 --recieve-only           Run dns_responder in receive-only mode (no responses sent)
 --dry-run                Print commands without executing
@@ -141,24 +174,18 @@ results/
 │   ├── results.csv
 │   ├── results.json
 │   └── charts/
-│       └── requested_vs_achieved.png
 ├── qps_accuracy/
 │   ├── raw/
 │   ├── timestamps/              # dns_responder timestamp files
 │   ├── results.csv
 │   ├── results.json
 │   └── charts/
-│       ├── accuracy_mean_1s.png
-│       ├── accuracy_stddev_100ms.png
-│       └── ...
 └── load_impact/
     ├── raw/
+    ├── collectl/                # raw collectl trail files per run (if enabled)
     ├── results.csv
     ├── results.json
     └── charts/
-        ├── bind-resolver_answer_rate.png
-        ├── bind-resolver_latency.png
-        └── threshold_summary.txt
 ```
 
 ## Architecture

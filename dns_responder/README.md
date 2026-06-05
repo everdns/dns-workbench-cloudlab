@@ -1,7 +1,6 @@
 # AF_XDP DNS Response Generator
 
-High-performance authoritative DNS response generator for benchmarking DNS load-testing tools. Uses AF_XDP for zero-copy packet processing, targeting 3+ million packets per second (Mpps).
-
+High-performance authoritative DNS response generator for benchmarking DNS load-testing tools. Uses AF_XDP for zero-copy packet processing.
 ## Architecture
 
 ### Packet Flow
@@ -90,7 +89,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-b, --batch-size N` | RX/TX batch size | 64 |
 | `-f, --frame-count N` | UMEM frames per queue | 4096 |
 | `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |
-| `-T, --ts-range` | Track min/max RX timestamps, report actual QPS | — |
+| `-T, --ts-range` | Track min/max RX timestamps, for reporting actual QPS | — |
 | `-N, --nxdomain` | Always return NXDOMAIN (fast path, minimal stats)| — |
 | `-C, --count-only` | Count packets only, don't respond (ultra-fast mode) | — |
 | `-x, --xdp-prog FILE` | Path to XDP object file | `./xdp/xdp_dns_redirect.o` |
@@ -126,22 +125,10 @@ sudo ./dns_responder -i eth1 -q 4
 
 ## Example Usage with Load Testers
 
-### dnsperf
-
-```sh
-# On the load generator host:
-dnsperf -s <responder_ip> -d queryfile.txt -l 30 -c 8 -Q 1000000
-
-# On the responder host:
-sudo ./dns_responder -i eth1 -d 35
-```
-
-### kxdpgun
-
 For raw packet counting (bypassing DNS response generation entirely):
 ```sh
 # On the load generator host:
-sudo kxdpgun -t 30 -Q 3000000 -i eth1 <responder_ip>
+sudo <load_generator> <options> <responder_ip>
 
 # On the responder host (count-only mode):
 sudo ./dns_responder -i eth1 -C -T -d 35
@@ -150,20 +137,19 @@ sudo ./dns_responder -i eth1 -C -T -d 35
 For full DNS response generation:
 ```sh
 # On the load generator host:
-sudo kxdpgun -t 30 -Q 3000000 -i eth1 <responder_ip>
+sudo <load_generator> <options> <responder_ip>
 
 # On the responder host:
 sudo ./dns_responder -i eth1 -T -d 35
 ```
 
-### dns64perf++
-
+For full timestamp collection:
 ```sh
 # On the load generator host:
-dns64perf++ <responder_ip> 53 <queryfile> 30 1000000
+sudo <load_generator> <options> <responder_ip>
 
 # On the responder host:
-sudo ./dns_responder -i eth1 -d 35
+sudo ./dns_responder -i eth1 -t -d 35
 ```
 
 ## Timestamps File Format
@@ -203,7 +189,7 @@ Actual traffic window: 29.847s (first pkt to last pkt)
   TX QPS:          1503791 qps (1.50 Mqps)
 ```
 
-Unlike `-t` (which writes every per-packet timestamp to a file), `-T` has negligible overhead. In standard response mode, it uses one per-packet `clock_gettime` call (~30 ns). In count-only mode (`-C -T`), the overhead is even lighter — just one `clock_gettime` per batch (~50–100 µs apart), enabling accurate measurement even at 5M+ pps while maintaining sub-millisecond window accuracy.
+Unlike `-t` (which writes every per-packet timestamp to a file), `-T` has negligible overhead. In standard response mode, it uses one per-packet `clock_gettime` call. In count-only mode (`-C -T`), the overhead is even lighter — just one `clock_gettime` per batch.
 
 ## Count-Only Mode (`-C`)
 
@@ -215,9 +201,9 @@ The `-C` / `--count-only` flag enables an ultra-minimal mode designed for high-p
 4. Produces aggregate RX statistics
 
 This mode is optimized for:
-- Measuring raw packet reception rates with kxdpgun or other AF_XDP load generators
+- Measuring raw packet reception rates
 - Eliminating response generation overhead to focus on NIC/kernel performance
-- Accurate QPS tracking when combined with `-T` (one `clock_gettime` per batch, ~0.06% overhead at 5M pps)
+- Accurate QPS tracking when combined with `-T` (one `clock_gettime` per batch)
 
 Unlike `--nxdomain`, count-only mode has no packet processing logic (no DNS header parsing, no answer templates), making it the absolute fastest path for pure packet counting.
 
@@ -238,8 +224,6 @@ Unlike `--nxdomain`, count-only mode has no packet processing logic (no DNS head
 Packet loss = (dns_responder RX - dns_responder TX) / dns_responder RX × 100%
 ```
 
-If TX < RX, packets were dropped during response generation (unlikely unless UMEM exhausted).
-
 For network-level loss, compare with the `packet_capture/dns_timestamp.py` eBPF tool:
 ```sh
 # Run simultaneously on the responder host:
@@ -249,7 +233,7 @@ sudo python3 ../packet_capture/dns_timestamp.py -i eth1 -o capture.dtrace -d 35
 python3 ../packet_capture/dns_timestamp_analyze.py capture.dtrace
 ```
 
-Cross-reference the packet capture's RX/TX counts with `dns_responder` stats and the load generator's report. Three independent measurement points allow triangulating where loss occurs (network TX, network RX, or application).
+Cross-reference the packet capture's RX/TX counts with `dns_responder` stats and the load generator's report. Three independent measurement points allow triangulating where loss occurs (network TX, network RX, or application). Note that at high QPS packet_capture/dns_timestamp.py may drop packets. 
 
 ### Detecting Skew
 
@@ -258,7 +242,7 @@ If the load generator reports a different query rate than `dns_responder` RX rat
 - XDP program not attached correctly (check `ip link show dev <iface>`)
 - Ring buffer overflow (increase `--frame-count`)
 
-## Performance Tuning
+## Optional Performance Tuning
 
 ### NIC Configuration
 

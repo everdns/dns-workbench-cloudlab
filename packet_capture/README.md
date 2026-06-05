@@ -1,6 +1,6 @@
 # DNS Packet Capture & Timestamping
 
-High-performance per-packet timestamping for DNS traffic (UDP port 53) at 1-3+ million packets per second using eBPF (XDP + TC).
+High-performance per-packet timestamping for DNS traffic (UDP port 53) using eBPF (XDP + TC).
 
 ## How it works
 
@@ -109,9 +109,3 @@ Output includes:
 | 25 | 1 | QR flag (0=query, 1=response) |
 | 26 | 2 | Padding |
 
-## Timestamp accuracy
-
-- `bpf_ktime_get_ns()` uses the TSC (Time Stamp Counter) on x86 — monotonic, nanosecond resolution, <100ns jitter in XDP context
-- XDP fires before sk_buff allocation, so RX timestamps are as close to wire time as possible without hardware timestamping
-- TC egress timestamps are taken just before the packet leaves the kernel
-- Cross-node correlation requires NTP sync (~1ms) or PTP for sub-millisecond accuracy

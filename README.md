@@ -24,6 +24,9 @@ The profile creates three types of nodes:
 
 When a specific software is selected, it is installed and started automatically. When `all` is selected, all supported software for that role is installed but **not** started, allowing you to start the desired one manually.
 
+## ssh keys
+Prior to running testing it is required to add the ssh key of the host running the load_testing_benchmark tests to the .ssh/authorized_keys file on each host.
+
 ## start_dns_service.sh
 
 Starts a DNS service on the current node.
