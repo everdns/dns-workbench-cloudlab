@@ -16,10 +16,10 @@ else
     echo "libxdp-dev not in repos, building xdp-tools from source..."
     sudo apt install -y libpcap-dev m4
     if [ ! -d /opt/xdp-tools ]; then
-        sudo git clone https://github.com/xdp-project/xdp-tools.git /opt/xdp-tools
+        sudo git clone --branch v1.6.3 --depth 1 https://github.com/xdp-project/xdp-tools.git /opt/xdp-tools
     fi
     cd /opt/xdp-tools
-    sudo git submodule update --init
+    sudo git submodule update --init --recursive
     sudo ./configure
     sudo make
     sudo make install
