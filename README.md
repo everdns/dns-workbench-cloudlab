@@ -39,18 +39,6 @@ Options follow the form `<role>_<software>`, where `<role>` is `ns` (authoritati
 `resolver_software/`. The available options are discovered automatically, so running the
 script with no argument (or an unknown one) prints the current list.
 
-| Option | Description |
-|---|---|
-| `resolver_bind` | BIND as a recursive resolver |
-| `ns_bind` | BIND as an authoritative name server |
-| `resolver_powerdns` | PowerDNS Recursor |
-| `ns_powerdns` | PowerDNS Authoritative Server |
-| `resolver_knot` | Knot Resolver |
-| `ns_knot` | Knot DNS (authoritative) |
-| `ns_nsd` | NSD (authoritative) |
-| `resolver_unbound` | Unbound resolver |
-| `ns_unbound` | Unbound (authoritative) |
-
 ## stop_dns_service.sh
 
 Stops DNS services on the current node.
@@ -102,3 +90,50 @@ This script:
 1. Stops all running DNS services.
 2. Removes NSD and Unbound (compiled from source) via `make uninstall` and deletes their source/config directories.
 3. Removes BIND, PowerDNS, Knot DNS, and Knot Resolver via `apt-get remove --purge`.
+
+## test_setup.sh
+
+Smoke-tests each DNS server implementation against a remote node by starting it, issuing a `dig` query, and then stopping it again. Run this from a node that has SSH access to the target (e.g. a test host), not on the server under test.
+
+```
+./test_setup.sh [SERVER_IP] [SERVER_TYPE]
+```
+
+- `SERVER_IP` -- IP address to send `dig` queries to (default: `10.10.1.2`).
+- `SERVER_TYPE` -- which group of servers to test (default: `NS`). `NS` tests every software under `ns_software/`; any other value tests every software under `resolver_software/`.
+- For each discovered software, the script SSHes to `SERVER_IP` to stop all services, start the target service, runs `dig @SERVER_IP ns1.workbench.lan`, then stops the service again.
+- Run with `-h` or `--help` for usage.
+
+```
+./test_setup.sh                       # test NS servers at 10.10.1.2
+./test_setup.sh 10.10.1.3             # test NS servers at 10.10.1.3
+./test_setup.sh 10.10.1.3 resolver    # test resolver servers at 10.10.1.3
+```
+
+## update_zone_files.sh
+
+Updates the zone file for authoritative (`ns_software`) software on the current node.
+
+```
+sudo /local/repository/update_zone_files.sh <zone-file-path> [software ...]
+```
+
+- `<zone-file-path>` -- path to the zone file to install (e.g. `output/db.workbench.lan`).
+- `[software ...]` -- one or more authoritative software names to update. With no names given, the script updates every `ns_software` directory that provides an `update_zone.sh`.
+- Each named software is updated by invoking its `ns_software/<sw>/update_zone.sh`; software without that script is skipped.
+
+```
+sudo /local/repository/update_zone_files.sh output/db.workbench.lan
+sudo /local/repository/update_zone_files.sh output/db.workbench.lan bind knot
+```
+
+## clear_cache.sh
+
+Clears the cache of a single DNS software service on the current node. In practice only resolver software has a cache to clear.
+
+```
+sudo /local/repository/clear_cache.sh <software>
+```
+
+- Accepts a `<role>_<software>` target (e.g. `resolver_bind`), the same form used by `start_dns_service.sh`.
+- Available options are discovered automatically; running the script with no argument (or an unknown one) prints the current list.
