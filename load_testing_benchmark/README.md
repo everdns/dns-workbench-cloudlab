@@ -36,7 +36,7 @@ Edit `config.yaml` with your environment:
 ```yaml
 hosts:
   server: user@server-host    # SSH target for the server
-  client: localhost            # SSH target for the client (or localhost)
+  client: localhost           # SSH target for the client (or localhost)
 
 resolver: "10.0.0.1"          # IP address tools send DNS queries to
 server_interface: eth0         # Network interface for dns_responder
@@ -187,30 +187,6 @@ results/
     ├── results.json
     └── charts/
 ```
-
-## Architecture
-
-```
-benchmark/
-├── config.py          # YAML + CLI config loading
-├── remote.py          # SSH execution & SCP file transfer
-├── dns_responder.py   # dns_responder lifecycle management
-├── dns_servers.py     # DNS server start/stop
-├── results.py         # Dataclasses, CSV/JSON export, timestamp analysis
-├── charts.py          # matplotlib chart generation
-└── tools/
-    ├── base.py        # Abstract tool adapter
-    ├── dnsperf.py
-    ├── dnsperf_workbench.py   # slice + lencse variants
-    ├── dnspyre.py
-    ├── dnspyre_workbench.py
-    ├── dns64perfpp.py
-    ├── dns64perfpp_workbench.py
-    ├── kxdpgun.py
-    └── kxdpgun_dnsworkbench.py
-```
-
-Each tool adapter implements `build_command()` (generates the shell command for a given config and target QPS) and `parse_output()` (extracts structured metrics from stdout).
 
 ## Tool Names for --tools
 
