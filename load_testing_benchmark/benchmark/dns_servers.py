@@ -1,6 +1,7 @@
 import logging
 import time
 
+from benchmark.hosts import get_clients
 from benchmark.remote import ssh_run
 
 log = logging.getLogger(__name__)
@@ -87,7 +88,8 @@ def warmup_dns_cache(config, qps=None, timeout=None):
     Uses a moderate QPS so the resolver can resolve each unique query
     recursively without dropping requests.
     """
-    client = config["hosts"]["client"]
+    # Cache warmup is a single control pass; run it from the first client.
+    client = get_clients(config)[0]
     server = config["hosts"]["server"]
     input_file = config["input_files"]["dnsperf"]
     query_timeout = config.get("timeout", 5)
@@ -118,7 +120,8 @@ def wait_for_dns_ready(config, timeout=30):
     Uses dig to send a test query.
     """
     server = config["hosts"]["server"]
-    client = config["hosts"]["client"]
+    # Readiness probe is a single dig; run it from the first client.
+    client = get_clients(config)[0]
 
     log.info("Waiting for DNS server at %s to be ready...", server)
     deadline = time.time() + timeout

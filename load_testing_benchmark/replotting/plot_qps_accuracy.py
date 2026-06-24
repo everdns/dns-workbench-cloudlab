@@ -42,6 +42,9 @@ def load_from_csv(csv_path):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Plot only aggregate rows; per-host rows would double-count.
+            if row.get("host", "ALL") != "ALL":
+                continue
             # Convert numeric fields
             for key in ("target_qps", "trial"):
                 if key in row:

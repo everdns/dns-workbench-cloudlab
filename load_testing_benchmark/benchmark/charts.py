@@ -151,6 +151,9 @@ def plot_max_throughput(results, output_dir, legend:bool = True):
     """
     os.makedirs(output_dir, exist_ok=True)
 
+    # Plot only aggregate rows; per-host rows would double-count.
+    results = [r for r in results if r.get("host", "ALL") == "ALL"]
+
     # Group by tool -> requested_qps -> list of achieved values (across trials)
     by_tool_qps = defaultdict(lambda: defaultdict(list))
     for row in results:
@@ -227,6 +230,9 @@ def plot_qps_accuracy(results, output_dir, legend:bool = True):
         output_dir: directory to save charts
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    # Plot only aggregate rows; per-host rows would double-count.
+    results = [r for r in results if r.get("host", "ALL") == "ALL"]
 
     intervals = set(row["interval"] for row in results if row["interval"] != "N/A")
     all_tools = sorted(set(row["tool"] for row in results))
@@ -373,6 +379,9 @@ def plot_pps_accuracy(results, output_dir):
     """
     os.makedirs(output_dir, exist_ok=True)
 
+    # Plot only aggregate rows; per-host rows would double-count.
+    results = [r for r in results if r.get("host", "ALL") == "ALL"]
+
     intervals = set(row["interval"] for row in results if row["interval"] != "N/A")
     all_tools = sorted(set(row["tool"] for row in results))
 
@@ -515,6 +524,9 @@ def plot_load_impact(results, output_dir):
         output_dir: directory to save charts
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    # Plot only aggregate rows; per-host rows would double-count.
+    results = [r for r in results if r.get("host", "ALL") == "ALL"]
 
     dns_services = sorted(set(row["dns_service"] for row in results))
     all_tools = sorted(set(row["tool"] for row in results))

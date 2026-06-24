@@ -25,13 +25,20 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmark.charts import plot_max_throughput
-from benchmark.results import parse_dns_responder_output, read_first_last_timestamp
+from benchmark.results import (
+    aggregate_tool_results,
+    parse_dns_responder_output,
+    read_first_last_timestamp,
+)
 from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
 
-# Matches filenames like "dnspyre_200000qps_tool.txt" or "dnspyre-workbench_100000qps_trial1_tool.txt"
-TOOL_FILE_RE = re.compile(r"^(.+)_(\d+)qps(?:_trial\d+)?_tool\.txt$")
+# Matches "dnspyre_200000qps_tool.txt", "dnspyre_100000qps_trial1_tool.txt" or
+# multi-host "dnspyre_100000qps_trial1_host-a_tool.txt" (host group optional).
+TOOL_FILE_RE = re.compile(
+    r"^(?P<tool>.+)_(?P<qps>\d+)qps(?:_trial(?P<trial>\d+))?(?:_(?P<host>.+))?_tool\.txt$"
+)
 
 
 def parse_tool_stdout(raw_text):
@@ -50,6 +57,9 @@ def load_from_csv(csv_path):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Plot only aggregate rows; per-host rows would double-count.
+            if row.get("host", "ALL") != "ALL":
+                continue
             for key in ("requested_qps", "trial", "rx_total", "tx_total", "drops",
                         "tool_queries_sent", "tool_queries_completed", "tool_queries_lost"):
                 if key in row and row[key]:
@@ -76,7 +86,9 @@ def load_from_raw_dir(results_dir):
         sys.exit(1)
 
     tool_cache = {}
-    results = []
+    # Group per-host tool files that share one (per-test) responder file, then
+    # aggregate them just like the live driver does.
+    groups = {}  # resp_file -> {"tool", "qps", "results": [ToolResult]}
 
     for tool_file in sorted(tool_files):
         filename = os.path.basename(tool_file)
@@ -85,8 +97,9 @@ def load_from_raw_dir(results_dir):
             log.warning("Skipping unrecognized file: %s", filename)
             continue
 
-        tool_name = m.group(1)
-        qps = int(m.group(2))
+        tool_name = m.group("tool")
+        qps = int(m.group("qps"))
+        host = m.group("host")
 
         if tool_name not in tool_cache:
             try:
@@ -102,30 +115,41 @@ def load_from_raw_dir(results_dir):
         stdout = parse_tool_stdout(raw_text)
         tool_result = tool.parse_output(stdout)
 
-        # Derive responder filename from tool filename
-        resp_file = tool_file.replace("_tool.txt", "_responder.txt")
+        # The responder file is per-test (no host token). Strip the host segment
+        # to recover its name; old single-host files have no host segment.
+        if host:
+            resp_file = tool_file.replace(f"_{host}_tool.txt", "_responder.txt")
+        else:
+            resp_file = tool_file.replace("_tool.txt", "_responder.txt")
+
+        g = groups.setdefault(resp_file, {"tool": tool, "qps": qps, "results": []})
+        g["results"].append(tool_result)
+
+    results = []
+    for resp_file, g in groups.items():
         if not os.path.exists(resp_file):
-            log.warning("Missing responder file for %s at %d QPS, skipping", tool_name, qps)
+            log.warning("Missing responder file %s, skipping", os.path.basename(resp_file))
             continue
         with open(resp_file) as f:
             resp_text = f.read()
         resp_result = parse_dns_responder_output(resp_text)
-        actual_qps = resp_result.rx_qps
-        log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
-                 actual_qps, resp_result.actual_duration_secs)
 
-        row = {
-            "tool": tool.name,
-            "requested_qps": qps,
-            "achieved_qps_responder": actual_qps,
+        agg = aggregate_tool_results(g["results"])
+        log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
+                 resp_result.rx_qps, resp_result.actual_duration_secs)
+
+        results.append({
+            "tool": g["tool"].name,
+            "host": "ALL",
+            "requested_qps": g["qps"],
+            "achieved_qps_responder": resp_result.rx_qps,
             "actual_duration_secs": resp_result.actual_duration_secs,
             "rx_total": resp_result.rx_total,
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,
-            "queries_not_received_dns_responder": tool_result.queries_sent - resp_result.rx_total,
-            "queries_not_received_tool": resp_result.tx_total - tool_result.queries_completed,
-        }
-        results.append(row)
+            "queries_not_received_dns_responder": agg.queries_sent - resp_result.rx_total,
+            "queries_not_received_tool": resp_result.tx_total - agg.queries_completed,
+        })
 
     return results
 

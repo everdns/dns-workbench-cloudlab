@@ -34,8 +34,9 @@ from benchmark.dns_servers import (
     wait_for_dns_ready,
     warmup_dns_cache,
 )
-from benchmark.remote import ssh_run
-from benchmark.results import ResultStore
+from benchmark.hosts import get_clients, host_token, split_qps
+from benchmark.remote import extract_run_result, ssh_run_many
+from benchmark.results import ResultStore, ToolResult, aggregate_tool_results
 from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
@@ -46,14 +47,18 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s
 
     Returns result dict or None on failure.
     """
-    client = config["hosts"]["client"]
+    clients = get_clients(config)
+    shares = split_qps(qps, len(clients))
     dry_run = config.get("dry_run", False)
 
-    tool.validate_params(config, qps)
-    cmd = tool.build_command(config, qps)
+    host_cmds = {}
+    for host, share in zip(clients, shares):
+        tool.validate_params(config, share)
+        host_cmds[host] = tool.build_command(config, share)
 
-    log.info("Impact test: %s vs %s at %d QPS, trial %d",
-             tool.name, dns_service, qps, trial + 1)
+    log.info("Impact test: %s vs %s at %d QPS, trial %d across %d host(s): %s",
+             tool.name, dns_service, qps, trial + 1, len(clients),
+             dict(zip(clients, shares)))
 
     collectl_enabled = bool(s3.get("collectl", False))
     collectl_margin = int(s3.get("collectl_margin", 5))
@@ -61,7 +66,8 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s
     collectl_local_path = None
 
     if dry_run:
-        log.info("[DRY RUN] Would run: %s", cmd)
+        for host, cmd in host_cmds.items():
+            log.info("[DRY RUN] Would run on %s: %s", host, cmd)
         if collectl_enabled:
             runtime = config["runtime"]
             log.info(
@@ -85,49 +91,65 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s
             log.warning("Failed to start collectl: %s. Continuing without it.", e)
             collectl_session = None
 
+    def latency_fields(tr, include_percentiles):
+        """Build latency columns for a row from a ToolResult."""
+        fields = {}
+        if tool.reports_latency:
+            fields["avg_latency_s"] = tr.avg_latency
+            fields["min_latency_s"] = tr.min_latency
+            fields["max_latency_s"] = tr.max_latency
+            fields["latency_stddev_s"] = tr.latency_stddev
+            if include_percentiles and tr.percentiles:
+                for pct, val in tr.percentiles.items():
+                    fields[f"latency_{pct}_s"] = val
+        return fields
+
+    def answer_rate(tr):
+        if tr.queries_sent > 0:
+            return round(tr.queries_completed / tr.queries_sent * 100.0, 4)
+        return 0.0
+
     try:
         tool_timeout = config["runtime"] + 2 * collectl_margin + 120
-        result = ssh_run(client, cmd, timeout=tool_timeout)
+        run_results = ssh_run_many(host_cmds, timeout=tool_timeout)
 
-        tool_stdout = result.stdout
-        tool_stderr = result.stderr
+        # Save per-host output and parse each host's metrics
+        per_host = []  # (host, share, ToolResult)
+        for host, share in zip(clients, shares):
+            stdout, stderr, rc, host_timed_out = extract_run_result(run_results[host])
+            if host_timed_out:
+                log.warning("%s timed out on %s at %d QPS", tool.name, host, share)
+            elif rc not in (0, None):
+                log.warning("%s returned exit code %d on %s", tool.name, rc, host)
 
-        if result.returncode != 0:
-            log.warning("%s returned exit code %d", tool.name, result.returncode)
+            store.save_raw_output(
+                script_name,
+                f"{dns_service}_{tool.name}_{qps}qps_trial{trial}_{host_token(host)}.txt",
+                f"=== STDOUT ===\n{stdout}\n=== STDERR ===\n{stderr}",
+            )
+            try:
+                tr = tool.parse_output(stdout)
+            except Exception:
+                tr = ToolResult()
+            per_host.append((host, share, tr))
 
-        store.save_raw_output(
-            script_name,
-            f"{dns_service}_{tool.name}_{qps}qps_trial{trial}.txt",
-            f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}",
-        )
+        # Aggregate across hosts for the ALL row
+        agg = aggregate_tool_results([tr for _, _, tr in per_host])
 
-        tool_result = tool.parse_output(tool_stdout)
-
-        # Calculate answer rate
-        answer_rate = 0.0
-        if tool_result.queries_sent > 0:
-            answer_rate = tool_result.queries_completed / tool_result.queries_sent * 100.0
-
-        row = {
+        all_row = {
             "dns_service": dns_service,
             "tool": tool.name,
+            "host": "ALL",
             "target_qps": qps,
             "trial": trial + 1,
-            "achieved_qps": tool_result.achieved_qps,
-            "queries_sent": tool_result.queries_sent,
-            "queries_completed": tool_result.queries_completed,
-            "queries_lost": tool_result.queries_lost,
-            "answer_rate_pct": round(answer_rate, 4),
+            "achieved_qps": agg.achieved_qps,
+            "queries_sent": agg.queries_sent,
+            "queries_completed": agg.queries_completed,
+            "queries_lost": agg.queries_lost,
+            "answer_rate_pct": answer_rate(agg),
         }
-
-        if tool.reports_latency:
-            row["avg_latency_s"] = tool_result.avg_latency
-            row["min_latency_s"] = tool_result.min_latency
-            row["max_latency_s"] = tool_result.max_latency
-            row["latency_stddev_s"] = tool_result.latency_stddev
-            if tool_result.percentiles:
-                for pct, val in tool_result.percentiles.items():
-                    row[f"latency_{pct}_s"] = val
+        # Percentiles cannot be combined across hosts -> omit on aggregate.
+        all_row.update(latency_fields(agg, include_percentiles=False))
 
         if collectl_session is not None:
             try:
@@ -143,15 +165,33 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s
                 metrics = parse_collectl_file(
                     collectl_local_path, collectl_margin,
                 )
-                row.update({k: v for k, v in metrics.items() if v is not None})
+                all_row.update({k: v for k, v in metrics.items() if v is not None})
             except Exception as e:
                 log.warning(
                     "collectl collection/parse failed for %s vs %s at %d QPS trial %d: %s",
                     tool.name, dns_service, qps, trial + 1, e,
                 )
 
-        store.add_result(row)
-        return row
+        store.add_result(all_row)
+
+        # Per-host rows carry full latency (incl. percentiles/stddev).
+        for host, share, tr in per_host:
+            host_row = {
+                "dns_service": dns_service,
+                "tool": tool.name,
+                "host": host,
+                "target_qps": share,
+                "trial": trial + 1,
+                "achieved_qps": tr.achieved_qps,
+                "queries_sent": tr.queries_sent,
+                "queries_completed": tr.queries_completed,
+                "queries_lost": tr.queries_lost,
+                "answer_rate_pct": answer_rate(tr),
+            }
+            host_row.update(latency_fields(tr, include_percentiles=True))
+            store.add_result(host_row)
+
+        return all_row
 
     except subprocess.TimeoutExpired:
         log.error("%s timed out at %d QPS trial %d", tool.name, qps, trial + 1)
@@ -214,24 +254,25 @@ def main():
     for dns_service in services:
         log.info("=== Testing DNS service: %s ===", dns_service)
 
-        try:
-            # Stop any running services first
-            stop_dns_service(config)
-            time.sleep(2)
+        if not config.get("dry_run"):
+            try:
+                # Stop any running services first
+                stop_dns_service(config)
+                time.sleep(2)
 
-            # Start this DNS service
-            start_dns_service(config, dns_service)
-            wait_for_dns_ready(config, timeout=30)
+                # Start this DNS service
+                start_dns_service(config, dns_service)
+                wait_for_dns_ready(config, timeout=30)
 
-            if warmup_cache and not config.get("dry_run"):
-                try:
-                    warmup_dns_cache(config)
-                except Exception as e:
-                    log.warning("Cache warmup failed for %s: %s", dns_service, e)
+                if warmup_cache:
+                    try:
+                        warmup_dns_cache(config)
+                    except Exception as e:
+                        log.warning("Cache warmup failed for %s: %s", dns_service, e)
 
-        except Exception as e:
-            log.error("Failed to start %s: %s. Skipping.", dns_service, e)
-            continue
+            except Exception as e:
+                log.error("Failed to start %s: %s. Skipping.", dns_service, e)
+                continue
 
         try:
             qps = min_qps
@@ -273,11 +314,12 @@ def main():
                 qps += qps_step
 
         finally:
-            # Always stop the DNS service when done
-            try:
-                stop_dns_service(config, dns_service)
-            except Exception as e:
-                log.warning("Failed to stop %s: %s", dns_service, e)
+            # Always stop the DNS service when done (skipped on dry runs)
+            if not config.get("dry_run"):
+                try:
+                    stop_dns_service(config, dns_service)
+                except Exception as e:
+                    log.warning("Failed to stop %s: %s", dns_service, e)
 
     # Export results
     csv_path = store.export_csv(script_name)

@@ -31,8 +31,8 @@ def apply_cli_overrides(config, args):
     }
     if args.server:
         config.setdefault("hosts", {})["server"] = args.server
-    if args.client:
-        config.setdefault("hosts", {})["client"] = args.client
+    if args.clients:
+        config.setdefault("hosts", {})["clients"] = args.clients
     if args.dnsperf_input:
         config.setdefault("input_files", {})["dnsperf"] = args.dnsperf_input
     if args.dnspyre_input:
@@ -54,7 +54,9 @@ def add_common_args(parser):
     """Add common CLI arguments shared across all scripts."""
     parser.add_argument("--config", default=None, help="Path to config YAML file")
     parser.add_argument("--server", help="Server host (user@host)")
-    parser.add_argument("--client", help="Client host (user@host or localhost)")
+    parser.add_argument("--clients", nargs="+",
+                        help="Load-generation client hosts (user@host or localhost); "
+                             "target QPS is split evenly across them")
 
     parser.add_argument("--server-interface", help="Network interface on server (for dns_responder)")
     parser.add_argument("--client-interface", help="Network interface on client (for kxdpgun)")

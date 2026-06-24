@@ -34,6 +34,9 @@ def load_from_csv(csv_path):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Only aggregate rows carry the responder-derived columns below.
+            if row.get("host", "ALL") != "ALL":
+                continue
             row["requested_qps"] = int(float(row["requested_qps"]))
             row["trial"] = int(float(row["trial"]))
             row["queries_not_received_tool"] = int(float(row["queries_not_received_tool"]))

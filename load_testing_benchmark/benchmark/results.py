@@ -21,6 +21,66 @@ class ToolResult:
     raw_output: str = ""
 
 
+def aggregate_tool_results(tool_results):
+    """Combine per-host ToolResults into a single aggregate ToolResult.
+
+    Counters (queries_sent/completed/lost) and achieved_qps are summed. Latency
+    is combined as a query-weighted mean (weighted by queries_completed), with
+    min/max taken across hosts. Latency stddev is pooled across hosts using a
+    degrees-of-freedom weighted average of per-host variances:
+
+        s_p = sqrt( sum((n_i - 1) * s_i**2) / (sum(n_i) - k) )
+
+    where n_i = queries_completed for host i and k = number of hosts with
+    n_i >= 2 and a reported stddev. Percentiles are not combinable and are left
+    empty on the aggregate.
+    """
+    agg = ToolResult()
+    if not tool_results:
+        return agg
+
+    for code in (c for r in tool_results for c in r.response_codes):
+        agg.response_codes[code] = sum(
+            r.response_codes.get(code, 0) for r in tool_results
+        )
+
+    agg.queries_sent = sum(r.queries_sent for r in tool_results)
+    agg.queries_completed = sum(r.queries_completed for r in tool_results)
+    agg.queries_lost = sum(r.queries_lost for r in tool_results)
+    agg.achieved_qps = sum(r.achieved_qps for r in tool_results)
+    agg.run_time = max((r.run_time for r in tool_results), default=0.0)
+
+    # Query-weighted mean average latency.
+    weighted = [
+        (r.avg_latency, r.queries_completed)
+        for r in tool_results
+        if r.avg_latency is not None and r.queries_completed > 0
+    ]
+    total_weight = sum(w for _, w in weighted)
+    if total_weight > 0:
+        agg.avg_latency = sum(lat * w for lat, w in weighted) / total_weight
+
+    mins = [r.min_latency for r in tool_results if r.min_latency is not None]
+    maxs = [r.max_latency for r in tool_results if r.max_latency is not None]
+    if mins:
+        agg.min_latency = min(mins)
+    if maxs:
+        agg.max_latency = max(maxs)
+
+    # Pooled stddev (drop hosts with fewer than 2 samples or no stddev).
+    pool = [
+        (r.latency_stddev, r.queries_completed)
+        for r in tool_results
+        if r.latency_stddev is not None and r.queries_completed >= 2
+    ]
+    denom = sum(n for _, n in pool) - len(pool)
+    if denom > 0:
+        numer = sum((n - 1) * (s ** 2) for s, n in pool)
+        agg.latency_stddev = (numer / denom) ** 0.5
+
+    return agg
+
+
 @dataclass
 class DnsResponderResult:
     rx_total: int = 0

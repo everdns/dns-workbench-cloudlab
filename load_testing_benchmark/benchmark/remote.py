@@ -1,5 +1,6 @@
 import logging
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +84,51 @@ def ssh_run(host, command, timeout=None, check=False):
                 f"stderr: {result.stderr}"
             )
         return result
+
+
+def ssh_run_many(host_commands, timeout=None, check=False):
+    """Run commands on multiple hosts concurrently via SSH.
+
+    Args:
+        host_commands: dict mapping host -> command string.
+        timeout: per-host timeout passed to ssh_run.
+
+    Returns a dict mapping host -> subprocess.CompletedProcess, or the raised
+    exception (e.g. subprocess.TimeoutExpired) for hosts that failed. One host
+    failing does not abort the others — each result is captured independently so
+    the caller can inspect partial output.
+    """
+    results = {}
+
+    def _run(host, command):
+        try:
+            return ssh_run(host, command, timeout=timeout, check=check)
+        except Exception as e:  # noqa: BLE001 - captured per host for the caller
+            return e
+
+    with ThreadPoolExecutor(max_workers=max(1, len(host_commands))) as executor:
+        futures = {
+            executor.submit(_run, host, cmd): host
+            for host, cmd in host_commands.items()
+        }
+        for future in futures:
+            host = futures[future]
+            results[host] = future.result()
+    return results
+
+
+def extract_run_result(result):
+    """Normalize an ssh_run_many per-host result into a uniform tuple.
+
+    Returns (stdout, stderr, returncode, timed_out). ``returncode`` is None when
+    the host raised before producing one. Handles both CompletedProcess and the
+    captured exceptions (TimeoutExpired and others) returned by ssh_run_many.
+    """
+    if isinstance(result, subprocess.TimeoutExpired):
+        return result.stdout or "", result.stderr or "", None, True
+    if isinstance(result, Exception):
+        return "", str(result), None, False
+    return result.stdout, result.stderr, result.returncode, False
 
 
 def ssh_run_background(host, command):

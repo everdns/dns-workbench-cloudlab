@@ -1,6 +1,7 @@
 hosts:
   server: 10.10.1.2
-  client: localhost
+  clients:
+    - localhost
 
 server_interface: enp1s0f1np1
 client_interface: enp1s0f1np1

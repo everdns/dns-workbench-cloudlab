@@ -25,9 +25,12 @@ from benchmark.dns_responder import (
     run_dns_responder_session,
     wait_dns_responder,
 )
-from benchmark.remote import ssh_run
+from benchmark.hosts import get_clients, host_token, split_qps
+from benchmark.remote import extract_run_result, ssh_run_many
 from benchmark.results import (
     ResultStore,
+    ToolResult,
+    aggregate_tool_results,
     parse_dns_responder_output,
 )
 from benchmark.tools import get_tools
@@ -40,52 +43,61 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
 
     Returns a result dict or None on failure.
     """
-    client = config["hosts"]["client"]
-    server = config["hosts"]["server"]
+    clients = get_clients(config)
+    shares = split_qps(qps, len(clients))
     dry_run = config.get("dry_run", False)
 
-    tool.validate_params(config, qps)
-    cmd = tool.build_command(config, qps)
+    host_cmds = {}
+    for host, share in zip(clients, shares):
+        tool.validate_params(config, share)
+        host_cmds[host] = tool.build_command(config, share)
 
-    log.info("Testing %s at %d QPS", tool.name, qps)
-    log.info("Command: %s", cmd)
+    log.info("Testing %s at %d QPS across %d host(s): %s",
+             tool.name, qps, len(clients), dict(zip(clients, shares)))
+    for host, cmd in host_cmds.items():
+        log.info("  %s (%d QPS): %s", host, dict(zip(clients, shares))[host], cmd)
 
     if dry_run:
-        log.info("[DRY RUN] Would run on %s: %s", client, cmd)
+        for host, cmd in host_cmds.items():
+            log.info("[DRY RUN] Would run on %s: %s", host, cmd)
         return None
 
     # Start dns_responder on server
     session = run_dns_responder_session(config, timestamps=True, recieve_only=config.get("dns_responder_recieve_only", False))
 
-    tool_timed_out = False
-    tool_stdout = ""
-    tool_stderr = ""
-
     try:
-        # Run the load tool on client
+        # Run the load tool concurrently on every client
         tool_timeout = config["runtime"] + 120
-        try:
-            result = ssh_run(client, cmd, timeout=tool_timeout)
-            tool_stdout = result.stdout
-            tool_stderr = result.stderr
+        run_results = ssh_run_many(host_cmds, timeout=tool_timeout)
 
-            if result.returncode != 0:
-                log.warning("%s returned exit code %d at %d QPS",
-                            tool.name, result.returncode, qps)
-                log.warning("stderr: %s", tool_stderr[:500])
-        except subprocess.TimeoutExpired as e:
-            tool_timed_out = True
-            tool_stdout = e.stdout or ""
-            tool_stderr = e.stderr or ""
-            log.warning("%s timed out at %d QPS (killed by ssh_run)", tool.name, qps)
+        # Collect and save per-host output
+        per_host = []  # (host, share, ToolResult, host_timed_out)
+        for host, share in zip(clients, shares):
+            stdout, stderr, rc, host_timed_out = extract_run_result(run_results[host])
+            if host_timed_out:
+                log.warning("%s timed out on %s at %d QPS (killed by ssh_run)",
+                            tool.name, host, share)
+            elif rc not in (0, None):
+                log.warning("%s returned exit code %d on %s at %d QPS",
+                            tool.name, rc, host, share)
+                log.warning("stderr: %s", stderr[:500])
 
-        # Save raw tool output
-        store.save_raw_output(
-            script_name,
-            f"{tool.name}_{qps}qps_trial{trial}_tool.txt",
-            f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}"
-            + ("\n=== TIMED OUT ===" if tool_timed_out else ""),
-        )
+            store.save_raw_output(
+                script_name,
+                f"{tool.name}_{qps}qps_trial{trial}_{host_token(host)}_tool.txt",
+                f"=== STDOUT ===\n{stdout}\n=== STDERR ===\n{stderr}"
+                + ("\n=== TIMED OUT ===" if host_timed_out else ""),
+            )
+
+            try:
+                tr = tool.parse_output(stdout)
+            except Exception:
+                if not host_timed_out:
+                    log.warning("Could not parse %s output on %s", tool.name, host)
+                tr = ToolResult()
+            per_host.append((host, share, tr, host_timed_out))
+
+        tool_timed_out = any(t for _, _, _, t in per_host)
 
         # Wait for dns_responder to finish
         wait_dns_responder(
@@ -105,13 +117,17 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
             script_name, f"{tool.name}_{qps}qps_trial{trial}_responder.txt", resp_text,
         )
 
-        # Parse outputs — RX QPS is computed by dns_responder via -T flag
+        # Parse outputs — RX QPS (aggregate) is computed by dns_responder via -T flag
         resp_result = parse_dns_responder_output(resp_text)
         log.info("Achieved QPS according to dns_responder: %.2f (traffic window: %.3fs)",
                  resp_result.rx_qps, resp_result.actual_duration_secs)
 
-        row = {
+        # Aggregate per-host tool counters for the ALL row
+        agg = aggregate_tool_results([tr for _, _, tr, _ in per_host])
+
+        all_row = {
             "tool": tool.name,
+            "host": "ALL",
             "requested_qps": qps,
             "trial": trial,
             "achieved_qps_responder": resp_result.rx_qps,
@@ -120,25 +136,37 @@ def run_single_test(config, tool, qps, store, script_name, trial=1):
             "tx_total": resp_result.tx_total,
             "drops": resp_result.drops,
             "timed_out": tool_timed_out,
+            "tool_reported_qps": agg.achieved_qps,
+            "tool_queries_sent": agg.queries_sent,
+            "tool_queries_completed": agg.queries_completed,
+            "tool_queries_lost": agg.queries_lost,
+            "avg_latency_s": agg.avg_latency,
+            "queries_not_received_dns_responder": agg.queries_sent - resp_result.rx_total,
+            "queries_not_received_tool": resp_result.tx_total - agg.queries_completed,
         }
+        store.add_result(all_row)
 
-        # Parse tool output — best-effort if timed out (output may be incomplete)
-        try:
-            tool_result = tool.parse_output(tool_stdout)
-            row["tool_reported_qps"] = tool_result.achieved_qps
-            row["tool_queries_sent"] = tool_result.queries_sent
-            row["tool_queries_completed"] = tool_result.queries_completed
-            row["tool_queries_lost"] = tool_result.queries_lost
-            row["avg_latency_s"] = tool_result.avg_latency
-            row["queries_not_received_dns_responder"] = tool_result.queries_sent - resp_result.rx_total
-            row["queries_not_received_tool"] = resp_result.tx_total - tool_result.queries_completed
-        except Exception:
-            if not tool_timed_out:
-                raise
-            log.info("Could not parse %s output after timeout (expected)", tool.name)
+        # Per-host rows (responder metrics are server-side aggregate -> left blank)
+        for host, share, tr, host_timed_out in per_host:
+            store.add_result({
+                "tool": tool.name,
+                "host": host,
+                "requested_qps": share,
+                "trial": trial,
+                "achieved_qps_responder": None,
+                "actual_duration_secs": None,
+                "rx_total": None,
+                "tx_total": None,
+                "drops": None,
+                "timed_out": host_timed_out,
+                "tool_reported_qps": tr.achieved_qps,
+                "tool_queries_sent": tr.queries_sent,
+                "tool_queries_completed": tr.queries_completed,
+                "tool_queries_lost": tr.queries_lost,
+                "avg_latency_s": tr.avg_latency,
+            })
 
-        store.add_result(row)
-        return row
+        return all_row
 
     except Exception as e:
         log.error("Error running %s at %d QPS: %s", tool.name, qps, e)
