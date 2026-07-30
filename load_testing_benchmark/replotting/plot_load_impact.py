@@ -11,6 +11,9 @@ Usage:
     # Custom output directory:
     python examples/plot_load_impact.py --csv results.csv --output-dir my_charts/
 
+    # Without legends (camera-ready figures):
+    python examples/plot_load_impact.py --csv results.csv --no-legend
+
 The raw data directory should contain a raw/ subdirectory with files like:
     bind-ns_dnsperf_10000qps_trial0.txt
 """
@@ -194,6 +197,8 @@ def main():
                         help="Maximum target QPS to include in charts")
     parser.add_argument("--collectl-margin", type=int, default=5,
                         help="Seconds of samples to crop from each end of collectl trails (default: 5)")
+    parser.add_argument("--no-legend", dest="legend", action="store_false",
+                        help="Omit the legend from the charts (default: legend drawn)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -242,7 +247,7 @@ def main():
     log.info("Tools: %s", tools_found)
 
     results.sort(key=lambda r: (r["dns_service"], r["tool"], r["target_qps"], r["trial"]))
-    plot_load_impact(results, args.output_dir)
+    plot_load_impact(results, args.output_dir, legend=args.legend)
     log.info("Charts saved to %s", args.output_dir)
 
 
