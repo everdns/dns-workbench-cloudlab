@@ -1060,37 +1060,28 @@ def _plot_load_impact_combined_full(results, output_dir):
     # Top-row formatting
     ax_rate.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8,
                     label="99.99% threshold")
-    ax_rate.set_xlabel("Target QPS", fontsize=18)
-    ax_rate.set_ylabel("Answer Rate (%)", fontsize=18)
-    ax_rate.set_title("Answer Rate", fontsize=18, fontweight="bold")
-    ax_rate.set_ylim(bottom=max(0, ax_rate.get_ylim()[0]), top=101)
-    ax_rate.grid(True, alpha=0.3)
-    ax_rate.tick_params(labelsize=18)
-    ax_rate.xaxis.get_offset_text().set_fontsize(18)
-    ax_rate.yaxis.get_offset_text().set_fontsize(18)
+    # All text in this figure is size 18 / bold (see the uniform pass below).
+    FONT = dict(fontsize=18, fontweight="bold")
 
-    ax_lat.set_xlabel("Target QPS", fontsize=18)
-    ax_lat.set_ylabel("Avg Latency (ms)", fontsize=18)
-    ax_lat.set_title("Average Latency", fontsize=18, fontweight="bold")
-    ax_lat.grid(True, alpha=0.3)
-    ax_lat.tick_params(labelsize=18)
-    ax_lat.xaxis.get_offset_text().set_fontsize(18)
-    ax_lat.yaxis.get_offset_text().set_fontsize(18)
+    ax_rate.set_xlabel("Target QPS", **FONT)
+    ax_rate.set_ylabel("Answer Rate (%)", **FONT)
+    ax_rate.set_title("Answer Rate", **FONT)
+    ax_rate.set_ylim(bottom=max(0, ax_rate.get_ylim()[0]), top=101)
+
+    ax_lat.set_xlabel("Target QPS", **FONT)
+    ax_lat.set_ylabel("Avg Latency (ms)", **FONT)
+    ax_lat.set_title("Average Latency", **FONT)
     if not ax_lat.has_data():
         ax_lat.text(0.5, 0.5, "No latency data", ha="center", va="center",
-                    transform=ax_lat.transAxes, fontsize=18, color="gray")
+                    transform=ax_lat.transAxes, color="gray", **FONT)
 
     if all_sent_vals:
         lo, hi = min(all_sent_vals), max(all_sent_vals)
         ax_qc.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5,
                    linewidth=0.8, label="Ideal")
-    ax_qc.set_xlabel("Queries Sent", fontsize=18)
-    ax_qc.set_ylabel("Answers Received", fontsize=18)
-    ax_qc.set_title("Queries Sent vs Answers Received", fontsize=18, fontweight="bold")
-    ax_qc.grid(True, alpha=0.3)
-    ax_qc.tick_params(labelsize=18)
-    ax_qc.xaxis.get_offset_text().set_fontsize(18)
-    ax_qc.yaxis.get_offset_text().set_fontsize(18)
+    ax_qc.set_xlabel("Queries Sent", **FONT)
+    ax_qc.set_ylabel("Answers Received", **FONT)
+    ax_qc.set_title("Queries Sent vs Answers Received", **FONT)
 
     # Bottom-row formatting
     for ax, ylabel, title in (
@@ -1098,13 +1089,19 @@ def _plot_load_impact_combined_full(results, output_dir):
         (ax_mem, "RAM Used (MB)", "RAM Used"),
         (ax_net, "Net KB/s",      "Net KB/s"),
     ):
-        ax.set_xlabel("Target QPS", fontsize=18)
-        ax.set_ylabel(ylabel, fontsize=18)
-        ax.set_title(title, fontsize=18, fontweight="bold")
+        ax.set_xlabel("Target QPS", **FONT)
+        ax.set_ylabel(ylabel, **FONT)
+        ax.set_title(title, **FONT)
+
+    for ax in (ax_rate, ax_lat, ax_qc, ax_cpu, ax_mem, ax_net):
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=18)
-        ax.xaxis.get_offset_text().set_fontsize(18)
-        ax.yaxis.get_offset_text().set_fontsize(18)
+        for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
+            tick_label.set_fontweight("bold")
+        # Scientific-notation exponents (e.g. "1e6") are separate text objects
+        for offset in (ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text()):
+            offset.set_fontsize(18)
+            offset.set_fontweight("bold")
 
     # Shared legend across all six panels
     seen = {}
