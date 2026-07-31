@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from benchmark.charts import plot_legend, plot_max_throughput
+from benchmark.charts import plot_max_throughput
 from benchmark.results import (
     aggregate_tool_results,
     parse_dns_responder_output,
@@ -216,7 +216,6 @@ def main():
     plot_max_throughput(results, args.output_dir, legend=args.legend)
     log.info("Chart saved to %s", os.path.join(args.output_dir, "requested_vs_achieved.pdf"))
     if not args.legend:
-        plot_legend(results, args.output_dir)
         log.info("Legend saved to %s",
                  os.path.join(args.output_dir, "requested_vs_achieved_legend.pdf"))
 

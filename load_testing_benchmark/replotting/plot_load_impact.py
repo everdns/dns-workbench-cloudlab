@@ -11,7 +11,8 @@ Usage:
     # Custom output directory:
     python examples/plot_load_impact.py --csv results.csv --output-dir my_charts/
 
-    # Without legends (camera-ready figures):
+    # Without legends (camera-ready figures); each legend is written to its own
+    # <chart>_legend.pdf beside the chart:
     python examples/plot_load_impact.py --csv results.csv --no-legend
 
 The raw data directory should contain a raw/ subdirectory with files like:
@@ -198,7 +199,8 @@ def main():
     parser.add_argument("--collectl-margin", type=int, default=5,
                         help="Seconds of samples to crop from each end of collectl trails (default: 5)")
     parser.add_argument("--no-legend", dest="legend", action="store_false",
-                        help="Omit the legend from the charts (default: legend drawn)")
+                        help="Omit the legend from the charts; each legend is written "
+                             "to a separate <chart>_legend.pdf instead (default: legend drawn)")
     args = parser.parse_args()
 
     logging.basicConfig(
