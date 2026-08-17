@@ -6,8 +6,15 @@ CC        ?= gcc
 CFLAGS     = -O2 -Wall -Wextra -Wno-unused-parameter -pthread -g
 LDFLAGS    = -lxdp -lbpf -lpthread -lelf -lz
 
-BPF_CFLAGS = -O2 -g -target bpf -D__TARGET_ARCH_x86 \
-             -I/usr/include/x86_64-linux-gnu
+# eBPF target arch and the multiarch include dir holding <asm/types.h>.
+# clang -target bpf does not search the multiarch dir on its own.
+BPF_ARCH   := $(shell uname -m | sed 's/x86_64/x86/; s/aarch64/arm64/; \
+                                      s/ppc64le/powerpc/; s/s390x/s390/; \
+                                      s/arm.*/arm/')
+MULTIARCH  := $(shell $(CC) -print-multiarch 2>/dev/null)
+
+BPF_CFLAGS = -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH) \
+             $(if $(MULTIARCH),-I/usr/include/$(MULTIARCH))
 
 # Source files
 SRCS       = src/main.c src/af_xdp.c src/dns.c src/stats.c src/net.c

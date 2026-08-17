@@ -36,7 +36,9 @@ Edit `config.yaml` with your environment:
 ```yaml
 hosts:
   server: user@server-host    # SSH target for the server
-  client: localhost           # SSH target for the client (or localhost)
+  clients:                    # one or more load-generation hosts (or localhost).
+    - localhost               # Target QPS is split evenly across all clients.
+    # - user@client-2
 
 resolver: "10.0.0.1"          # IP address tools send DNS queries to
 server_interface: eth0         # Network interface for dns_responder
@@ -154,7 +156,7 @@ All scripts share these flags:
 ```
 --config FILE            Path to config YAML (default: config.yaml)
 --server USER@HOST       Server host for SSH
---client USER@HOST       Client host (default: localhost)
+--clients HOST [HOST ...] Load-generation hosts; target QPS split evenly across them (default: localhost)
 --resolver IP            DNS resolver IP
 --tools TOOL [TOOL ...]  Subset of tools to test
 --output-dir DIR         Output directory (default: results/)

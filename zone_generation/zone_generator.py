@@ -221,9 +221,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", default="config.json", help="Path to JSON config file")
     parser.add_argument("--sld", default=None, help="Second-level domain (default: workbench.lan)")
     parser.add_argument("--base-subnet", default=None, help="Base subnet address (default: 10.0.0.0)")
-    parser.add_argument("--num-records", type=int, default=None, help="Number of DNS records to generate (default: 16777216)")
+    parser.add_argument("--num-records", type=int, default=None, help="Number of DNS records to generate (default: 65536)")
     parser.add_argument("--max-records-per-file", type=int, default=None, help="Max records per zone file (default: 65536)")
-    parser.add_argument("--num-ips", type=int, default=None, help="Number of unique IPs (default: 16777216)")
+    parser.add_argument("--num-ips", type=int, default=None, help="Number of unique IPs (default: 65536)")
     parser.add_argument("--out-dir", default=None, help="Output directory (default: output)")
     args = parser.parse_args()
 

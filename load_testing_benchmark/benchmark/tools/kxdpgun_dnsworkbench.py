@@ -28,10 +28,13 @@ class KxdpgunWorkbench(Tool):
         if m:
             result.queries_sent = int(m.group(1))
 
-        # "total replies:     400033 (100008 pps) (99%)"
-        m = re.search(r"total replies:\s+([\d]+)\s+\((\d+)\s+pps\)", stdout)
-        if m:
-            result.queries_completed = int(m.group(1))
+        # Parse response codes
+        for m_code in re.finditer(r"responded\s+(\w+):\s+(\d+)", stdout):
+            result.response_codes[m_code.group(1)] = int(m_code.group(2))
+
+        # Count only NOERROR replies as completed queries.
+        # "responded NOERROR:   35231593"
+        result.queries_completed = result.response_codes.get("NOERROR", 0)
 
         result.queries_lost = result.queries_sent - result.queries_completed
 
@@ -59,9 +62,5 @@ class KxdpgunWorkbench(Tool):
         m = re.search(r"StdDev:\s+([\d.]+)\s+us", stdout)
         if m:
             result.latency_stddev = float(m.group(1)) / 1_000_000
-
-        # Parse response codes
-        for m_code in re.finditer(r"responded\s+(\w+):\s+(\d+)", stdout):
-            result.response_codes[m_code.group(1)] = int(m_code.group(2))
 
         return result

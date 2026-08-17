@@ -22,6 +22,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmark.config import load_config
+from benchmark.hosts import get_clients
 from benchmark.dns_servers import (
     start_dns_service,
     stop_dns_service,
@@ -74,7 +75,8 @@ def main():
 
     config = load_config(args.config)
     server = config["hosts"]["server"]
-    client = config["hosts"]["client"]
+    # Single dig probe per service; run it from the first client.
+    client = get_clients(config)[0]
     services = config["dns_services"]["services"]
 
     queries = [tuple(q) for q in args.query] if args.query else list(DEFAULT_QUERIES)

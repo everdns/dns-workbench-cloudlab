@@ -11,6 +11,10 @@ Usage:
     # Custom output directory:
     python examples/plot_load_impact.py --csv results.csv --output-dir my_charts/
 
+    # Without legends (camera-ready figures); each legend is written to its own
+    # <chart>_legend.pdf beside the chart:
+    python examples/plot_load_impact.py --csv results.csv --no-legend
+
 The raw data directory should contain a raw/ subdirectory with files like:
     bind-ns_dnsperf_10000qps_trial0.txt
 """
@@ -27,12 +31,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmark.charts import COLLECTL_METRICS, plot_load_impact
 from benchmark.collectl import parse_collectl_file
+from benchmark.results import aggregate_tool_results
 from benchmark.tools import get_tools
 
 log = logging.getLogger(__name__)
 
-# Matches: bind-ns_dnsperf_10000qps_trial0.txt
-RAW_FILE_RE = re.compile(r"^(.+?)_(.+)_(\d+)qps_trial(\d+)\.txt$")
+# Matches "bind-ns_dnsperf_10000qps_trial0.txt" and multi-host
+# "bind-ns_dnsperf_10000qps_trial0_host-a.txt" (host group optional).
+RAW_FILE_RE = re.compile(
+    r"^(?P<svc>.+?)_(?P<tool>.+)_(?P<qps>\d+)qps_trial(?P<trial>\d+)(?:_(?P<host>.+))?\.txt$"
+)
 
 
 def parse_tool_stdout(raw_text):
@@ -50,6 +58,9 @@ def load_from_csv(csv_path):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Plot only aggregate rows; per-host rows would double-count.
+            if row.get("host", "ALL") != "ALL":
+                continue
             # Convert numeric fields
             for key in ("target_qps", "trial"):
                 if key in row:
@@ -96,7 +107,8 @@ def load_from_raw_dir(raw_dir, collectl_margin=5):
         sys.exit(1)
 
     tool_cache = {}
-    results = []
+    # Group per-host raw files by test, then aggregate like the live driver.
+    groups = {}  # (svc, tool_name, qps, trial) -> {"tool", "results": [ToolResult]}
 
     for raw_file in sorted(raw_files):
         filename = os.path.basename(raw_file)
@@ -105,10 +117,10 @@ def load_from_raw_dir(raw_dir, collectl_margin=5):
             log.debug("Skipping unrecognized file: %s", filename)
             continue
 
-        dns_service = m.group(1)
-        tool_name = m.group(2)
-        target_qps = int(m.group(3))
-        trial = int(m.group(4))
+        dns_service = m.group("svc")
+        tool_name = m.group("tool")
+        target_qps = int(m.group("qps"))
+        trial = int(m.group("trial"))
 
         if tool_name not in tool_cache:
             try:
@@ -124,30 +136,38 @@ def load_from_raw_dir(raw_dir, collectl_margin=5):
         stdout = parse_tool_stdout(raw_text)
         tool_result = tool.parse_output(stdout)
 
+        key = (dns_service, tool_name, target_qps, trial)
+        g = groups.setdefault(key, {"tool": tool, "results": []})
+        g["results"].append(tool_result)
+
+    results = []
+    for (dns_service, tool_name, target_qps, trial), g in groups.items():
+        tool = g["tool"]
+        agg = aggregate_tool_results(g["results"])
+
         answer_rate = 0.0
-        if tool_result.queries_sent > 0:
-            answer_rate = tool_result.queries_completed / tool_result.queries_sent * 100.0
+        if agg.queries_sent > 0:
+            answer_rate = agg.queries_completed / agg.queries_sent * 100.0
 
         row = {
             "dns_service": dns_service,
             "tool": tool.name,
+            "host": "ALL",
             "target_qps": target_qps,
             "trial": trial + 1,
-            "achieved_qps": tool_result.achieved_qps,
-            "queries_sent": tool_result.queries_sent,
-            "queries_completed": tool_result.queries_completed,
-            "queries_lost": tool_result.queries_lost,
+            "achieved_qps": agg.achieved_qps,
+            "queries_sent": agg.queries_sent,
+            "queries_completed": agg.queries_completed,
+            "queries_lost": agg.queries_lost,
             "answer_rate_pct": round(answer_rate, 4),
         }
 
         if tool.reports_latency:
-            row["avg_latency_s"] = tool_result.avg_latency
-            row["min_latency_s"] = tool_result.min_latency
-            row["max_latency_s"] = tool_result.max_latency
-            row["latency_stddev_s"] = tool_result.latency_stddev
-            if tool_result.percentiles:
-                for pct, val in tool_result.percentiles.items():
-                    row[f"latency_{pct}_s"] = val
+            # Percentiles cannot be combined across hosts -> omit on aggregate.
+            row["avg_latency_s"] = agg.avg_latency
+            row["min_latency_s"] = agg.min_latency
+            row["max_latency_s"] = agg.max_latency
+            row["latency_stddev_s"] = agg.latency_stddev
 
         collectl_file = os.path.join(
             collectl_dir,
@@ -160,7 +180,7 @@ def load_from_raw_dir(raw_dir, collectl_margin=5):
         results.append(row)
         log.info("Parsed %s vs %s at %d QPS trial %d: sent=%d completed=%d rate=%.2f%%",
                  tool.name, dns_service, target_qps, trial + 1,
-                 tool_result.queries_sent, tool_result.queries_completed, answer_rate)
+                 agg.queries_sent, agg.queries_completed, answer_rate)
 
     return results
 
@@ -178,6 +198,9 @@ def main():
                         help="Maximum target QPS to include in charts")
     parser.add_argument("--collectl-margin", type=int, default=5,
                         help="Seconds of samples to crop from each end of collectl trails (default: 5)")
+    parser.add_argument("--no-legend", dest="legend", action="store_false",
+                        help="Omit the legend from the charts; each legend is written "
+                             "to a separate <chart>_legend.pdf instead (default: legend drawn)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -226,7 +249,7 @@ def main():
     log.info("Tools: %s", tools_found)
 
     results.sort(key=lambda r: (r["dns_service"], r["tool"], r["target_qps"], r["trial"]))
-    plot_load_impact(results, args.output_dir)
+    plot_load_impact(results, args.output_dir, legend=args.legend)
     log.info("Charts saved to %s", args.output_dir)
 
 

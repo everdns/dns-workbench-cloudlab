@@ -25,9 +25,11 @@ from benchmark.dns_responder import (
     run_dns_responder_session,
     wait_dns_responder,
 )
-from benchmark.remote import ssh_run
+from benchmark.hosts import get_clients, host_token, split_qps
+from benchmark.remote import extract_run_result, ssh_run_many
 from benchmark.results import (
     ResultStore,
+    ToolResult,
     compute_accuracy_metrics,
     compute_actual_runtime,
     parse_dns_responder_output,
@@ -43,16 +45,21 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
 
     Returns list of result rows (one per interval) or empty list on failure.
     """
-    client = config["hosts"]["client"]
+    clients = get_clients(config)
+    shares = split_qps(qps, len(clients))
     dry_run = config.get("dry_run", False)
 
-    tool.validate_params(config, qps)
-    cmd = tool.build_command(config, qps)
+    host_cmds = {}
+    for host, share in zip(clients, shares):
+        tool.validate_params(config, share)
+        host_cmds[host] = tool.build_command(config, share)
 
-    log.info("Accuracy test: %s at %d QPS, trial %d", tool.name, qps, trial + 1)
+    log.info("Accuracy test: %s at %d QPS, trial %d across %d host(s): %s",
+             tool.name, qps, trial + 1, len(clients), dict(zip(clients, shares)))
 
     if dry_run:
-        log.info("[DRY RUN] Would run: %s", cmd)
+        for host, cmd in host_cmds.items():
+            log.info("[DRY RUN] Would run on %s: %s", host, cmd)
         return []
 
     # Start dns_responder with timestamps
@@ -60,19 +67,27 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
 
     try:
         tool_timeout = config["runtime"] + 120
-        result = ssh_run(client, cmd, timeout=tool_timeout)
+        run_results = ssh_run_many(host_cmds, timeout=tool_timeout)
 
-        tool_stdout = result.stdout
-        tool_stderr = result.stderr
+        # Save per-host output and parse each tool's self-reported metrics
+        per_host = []  # (host, share, ToolResult)
+        for host, share in zip(clients, shares):
+            stdout, stderr, rc, host_timed_out = extract_run_result(run_results[host])
+            if host_timed_out:
+                log.warning("%s timed out on %s at %d QPS", tool.name, host, share)
+            elif rc not in (0, None):
+                log.warning("%s returned exit code %d on %s", tool.name, rc, host)
 
-        if result.returncode != 0:
-            log.warning("%s returned exit code %d", tool.name, result.returncode)
-
-        store.save_raw_output(
-            script_name,
-            f"{tool.name}_{qps}qps_trial{trial}_tool.txt",
-            f"=== STDOUT ===\n{tool_stdout}\n=== STDERR ===\n{tool_stderr}",
-        )
+            store.save_raw_output(
+                script_name,
+                f"{tool.name}_{qps}qps_trial{trial}_{host_token(host)}_tool.txt",
+                f"=== STDOUT ===\n{stdout}\n=== STDERR ===\n{stderr}",
+            )
+            try:
+                tr = tool.parse_output(stdout)
+            except Exception:
+                tr = ToolResult()
+            per_host.append((host, share, tr))
 
         # Wait for dns_responder
         wait_dns_responder(
@@ -119,10 +134,13 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
         log.info("Actual runtime from timestamps: %.3fs", actual_runtime_ns / 1e9)
         accuracy = compute_accuracy_metrics(timestamps, qps, config["runtime"], crop_s=crop_s)
 
+        # Accuracy metrics are derived from the server-side dns_responder
+        # timestamps, i.e. the aggregate of all hosts -> host "ALL".
         rows = []
         for label, metrics in accuracy.items():
             row = {
                 "tool": tool.name,
+                "host": "ALL",
                 "target_qps": qps,
                 "trial": trial + 1,
                 "interval": label,
@@ -141,10 +159,22 @@ def run_accuracy_test(config, tool, qps, trial, store, script_name, crop_s=0):
             store.add_result(row)
             rows.append(row)
 
-        # Parse tool output for logging
-        tool_result = tool.parse_output(tool_stdout)
-        log.info("  Tool reported QPS: %.1f, Responder reported: %.1f qps",
-                 tool_result.achieved_qps, resp_result.rx_qps)
+        # Per-host rows carry each host's self-reported QPS for visibility.
+        for host, share, tr in per_host:
+            store.add_result({
+                "tool": tool.name,
+                "host": host,
+                "target_qps": share,
+                "trial": trial + 1,
+                "interval": "N/A",
+                "tool_reported_qps": tr.achieved_qps,
+                "tool_queries_sent": tr.queries_sent,
+                "tool_queries_completed": tr.queries_completed,
+            })
+
+        total_tool_qps = sum(tr.achieved_qps for _, _, tr in per_host)
+        log.info("  Tool reported QPS (sum): %.1f, Responder reported: %.1f qps",
+                 total_tool_qps, resp_result.rx_qps)
 
         return rows
 
