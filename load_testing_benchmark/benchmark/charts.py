@@ -133,6 +133,19 @@ def _save_standalone_legend(fig, chart_path, ncol=None, fontsize=18):
     _write_legend_figure(list(seen.values()), list(seen.keys()),
                          f"{stem}_legend{ext or '.pdf'}", ncol=ncol, fontsize=fontsize)
 
+def _bold_axis_text(ax, fontsize=18):
+    """Force an axes' tick labels and scientific offset text to `fontsize` bold.
+
+    Tick label Text objects are only created once the ticks are laid out, so
+    call this after the data has been plotted and the limits are settled.
+    """
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontsize(fontsize)
+        lbl.set_fontweight("bold")
+    for axis in (ax.xaxis, ax.yaxis):
+        axis.get_offset_text().set_fontsize(fontsize)
+        axis.get_offset_text().set_fontweight("bold")
+
 def _trial_mean_std(rows, key):
     """Return (mean, stddev) of rows[key] across trials."""
     vals = [r[key] for r in rows]
@@ -304,11 +317,12 @@ def plot_qps_accuracy(results, output_dir, legend: bool = True):
             ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
                     "--", color="gray", alpha=0.5, label="Ideal")
 
-        ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"Mean Achieved QPS")
+        ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
+        ax.set_ylabel(f"Mean Achieved QPS", fontsize=18, fontweight="bold")
         if legend:
-            ax.legend(loc="upper left", fontsize=16)
+            ax.legend(loc="upper left", prop={"size": 18, "weight": "bold"})
         ax.grid(True, alpha=0.3)
+        _bold_axis_text(ax)
 
         path = os.path.join(output_dir, f"accuracy_mean_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -330,12 +344,13 @@ def plot_qps_accuracy(results, output_dir, legend: bool = True):
             ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"QPS Standard Deviation")
+        ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
+        ax.set_ylabel(f"QPS Standard Deviation", fontsize=18, fontweight="bold")
         if legend:
-            ax.legend(loc="upper left", fontsize=18)
+            ax.legend(loc="upper left", prop={"size": 18, "weight": "bold"})
         ax.grid(True, alpha=0.3)
         ax.ticklabel_format(axis="y", style="sci", scilimits=(5, 5))
+        _bold_axis_text(ax)
 
         path = os.path.join(output_dir, f"accuracy_stddev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -357,11 +372,12 @@ def plot_qps_accuracy(results, output_dir, legend: bool = True):
             ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                         capsize=3, linewidth=1.5, label=tool, **style)
 
-        ax.set_xlabel("Target QPS")
-        ax.set_ylabel(f"Max Deviation from Target")
+        ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
+        ax.set_ylabel(f"Max Deviation from Target", fontsize=18, fontweight="bold")
         if legend:
-            ax.legend(loc="upper left", fontsize=14, frameon=False)
+            ax.legend(loc="upper left", prop={"size": 18, "weight": "bold"}, frameon=False)
         ax.grid(True, alpha=0.3)
+        _bold_axis_text(ax)
 
         path = os.path.join(output_dir, f"accuracy_maxdev_{interval}.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -406,14 +422,16 @@ def plot_qps_accuracy(results, output_dir, legend: bool = True):
                     ax.plot([min(x_vals), max(x_vals)], [min(x_vals), max(x_vals)],
                             "--", color="gray", alpha=0.5, label="Ideal")
 
-                ax.set_xlabel("Target QPS")
-                ax.set_ylabel(f"{ylabel} ({interval})")
-                ax.set_title(f"{ylabel} ({interval})")
+                ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
+                ax.set_ylabel(f"{ylabel} ({interval})", fontsize=18, fontweight="bold")
+                ax.set_title(f"{ylabel} ({interval})", fontsize=18, fontweight="bold")
                 if legend:
-                    ax.legend(loc="best", fontsize=9)
+                    ax.legend(loc="best", prop={"size": 18, "weight": "bold"})
                 ax.grid(True, alpha=0.3)
+                _bold_axis_text(ax)
 
-        fig.suptitle("QPS Accuracy: All Metrics and Intervals", fontsize=18, y=1.01)
+        fig.suptitle("QPS Accuracy: All Metrics and Intervals",
+                     fontsize=18, fontweight="bold", y=1.01)
         fig.tight_layout()
         path = os.path.join(output_dir, "qps_accuracy_combined.pdf")
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -719,6 +737,15 @@ def plot_load_impact(results, output_dir, legend: bool = True):
     # --- Combined 1x3: all DNS services overlaid on each of the three metrics ---
     _plot_load_impact_combined(results, output_dir, legend)
 
+    # --- Combined 1x2: latency + queries sent vs answers received ---
+    _plot_load_impact_latency_qc(results, output_dir, legend)
+
+    # --- Single panel: queries sent vs answers received, all services ---
+    _plot_load_impact_qc_only(results, output_dir, legend)
+
+    # --- Combined 1x3: latency + queries sent vs answers received + CPU ---
+    _plot_load_impact_latency_qc_cpu(results, output_dir, legend)
+
     # --- Per-service collectl resource charts (individual + 1x3 combined) ---
     _plot_load_impact_resources(results, all_tools, output_dir, legend)
 
@@ -750,8 +777,8 @@ def _plot_load_impact_grid(results, all_tools, output_dir, legend: bool = True):
     n_cols = 3
     fig, axes = plt.subplots(
         n_rows, n_cols,
-        figsize=(6 * n_cols, 6 * n_rows),
-        #figsize=(14, 7.5),
+        #figsize=(5 * n_cols, 5 * n_rows),
+        figsize=(14, 8),
         squeeze=False,
     )
     #fig.suptitle("Load Generator Impact — All DNS Services", fontsize=18, fontweight="bold", y=1.01)
@@ -765,7 +792,7 @@ def _plot_load_impact_grid(results, all_tools, output_dir, legend: bool = True):
         tools_here = sorted(by_tool_qps.keys())
 
         # Row label on the leftmost axis
-        axes[row_idx][0].set_ylabel(f"{dns_service}\nAnswer Rate (%)", fontsize=18)
+        axes[row_idx][0].set_ylabel(f"{dns_service}\nAnswer Rate (%)", fontsize=18, fontweight="bold")
 
         # --- Col 0: Answer Rate ---
         ax = axes[row_idx][0]
@@ -781,12 +808,10 @@ def _plot_load_impact_grid(results, all_tools, output_dir, legend: bool = True):
             ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=3,
                         capsize=2, linewidth=1.2, label=tool, **style)
         ax.axhline(y=99.99, color="red", linestyle="--", alpha=0.5, linewidth=0.8)
-        ax.set_xlabel("Target QPS", fontsize=18)
+        ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
         ax.set_ylim(bottom=max(0, ax.get_ylim()[0]), top=101)
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=18)
-        ax.xaxis.get_offset_text().set_fontsize(18)
-        ax.yaxis.get_offset_text().set_fontsize(18)
 
         # --- Col 1: Latency ---
         ax = axes[row_idx][1]
@@ -812,13 +837,11 @@ def _plot_load_impact_grid(results, all_tools, output_dir, legend: bool = True):
                             capsize=2, linewidth=1.2, label=tool, **style)
         else:
             ax.text(0.5, 0.5, "No latency data", ha="center", va="center",
-                    transform=ax.transAxes, fontsize=18, color="gray")
-        ax.set_xlabel("Target QPS", fontsize=18)
-        ax.set_ylabel("Avg Latency (ms)", fontsize=18)
+                    transform=ax.transAxes, fontsize=18, fontweight="bold", color="gray")
+        ax.set_xlabel("Target QPS", fontsize=18, fontweight="bold")
+        ax.set_ylabel("Avg Latency (ms)", fontsize=18, fontweight="bold")
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=18)
-        ax.xaxis.get_offset_text().set_fontsize(18)
-        ax.yaxis.get_offset_text().set_fontsize(18)
 
         # --- Col 2: Queries Sent vs Answers Received ---
         ax = axes[row_idx][2]
@@ -839,12 +862,15 @@ def _plot_load_impact_grid(results, all_tools, output_dir, legend: bool = True):
         if all_sent_grid:
             lo, hi = min(all_sent_grid), max(all_sent_grid)
             ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5, linewidth=0.8, )#label="Ideal")
-        ax.set_xlabel("Queries Sent", fontsize=18)
-        ax.set_ylabel("Answers Received", fontsize=18)
+        ax.set_xlabel("Queries Sent", fontsize=18, fontweight="bold")
+        ax.set_ylabel("Answers Received", fontsize=18, fontweight="bold")
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=18)
-        ax.xaxis.get_offset_text().set_fontsize(18)
-        ax.yaxis.get_offset_text().set_fontsize(18)
+
+    # Tick labels and axis offset text (e.g. "1e6") in 18pt bold.
+    for ax_row in axes:
+        for ax in ax_row:
+            _bold_axis_text(ax)
 
     # Build a single shared legend from all unique (handle, label) pairs
     # across every subplot, so it doesn't overlap any chart.
@@ -1028,6 +1054,371 @@ def _plot_load_impact_combined(results, output_dir, legend: bool = True):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     if not legend:
         _save_standalone_legend(fig, path, ncol=min(len(seen), 4))
+    plt.close(fig)
+
+def _plot_load_impact_latency_qc(results, output_dir, legend: bool = True):
+    """Combined 1x2 chart: Avg Latency and Queries Sent vs Answers Received.
+
+    Same styling as _plot_load_impact_combined (color = DNS service,
+    marker + linestyle = tool), with every text element bold at size 18.
+    """
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    if not dns_services:
+        return
+    tools_present = sorted(set(row["tool"] for row in results))
+
+    COMBINED_TOOL_MARKERS = ["o", "s", "^", "D", "v"]
+    COMBINED_TOOL_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+
+    svc_color = {s: COMBINED_SERVICE_COLORS[i % len(COMBINED_SERVICE_COLORS)]
+                 for i, s in enumerate(dns_services)}
+    tool_marker = {t: COMBINED_TOOL_MARKERS[i % len(COMBINED_TOOL_MARKERS)]
+                   for i, t in enumerate(tools_present)}
+    tool_linestyle = {t: COMBINED_TOOL_LINESTYLES[i % len(COMBINED_TOOL_LINESTYLES)]
+                      for i, t in enumerate(tools_present)}
+
+    # Group once: tool -> dns_service -> target_qps -> [rows]
+    by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in results:
+        by_tool_svc_qps[row["tool"]][row["dns_service"]][row["target_qps"]].append(row)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
+    ax_lat, ax_qc = axes[0][0], axes[0][1]
+
+    all_sent_vals = []
+    for tool in tools_present:
+        for svc in dns_services:
+            if svc not in by_tool_svc_qps[tool]:
+                continue
+            svc_qps = by_tool_svc_qps[tool][svc]
+            label = svc
+            plot_kwargs = dict(
+                color=svc_color[svc],
+                marker=tool_marker[tool],
+                linestyle=tool_linestyle[tool],
+            )
+
+            x_vals = sorted(svc_qps.keys())
+
+            # Latency (ms) — only if tool reports it
+            has_latency = any(
+                r.get("avg_latency_s") is not None
+                for rows in svc_qps.values() for r in rows
+            )
+            if has_latency:
+                y_med, y_lo, y_hi = [], [], []
+                for qps in x_vals:
+                    lats = [r["avg_latency_s"] * 1000 for r in svc_qps[qps]
+                            if r.get("avg_latency_s") is not None]
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax_lat.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
+                                markersize=3, capsize=2, linewidth=1.2,
+                                label=label, **plot_kwargs)
+
+            # Queries Sent vs Answers Received
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
+            for qps in x_vals:
+                ms, slo, shi = _trial_median_p1_p99(svc_qps[qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(svc_qps[qps], "queries_completed")
+                sent_med.append(ms); sent_lo.append(slo); sent_hi.append(shi)
+                comp_med.append(mc); comp_lo.append(clo); comp_hi.append(chi)
+            ax_qc.errorbar(sent_med, comp_med,
+                           xerr=[sent_lo, sent_hi],
+                           yerr=[comp_lo, comp_hi],
+                           markersize=3, capsize=2, linewidth=1.2,
+                           label=label, **plot_kwargs)
+            all_sent_vals.extend(sent_med)
+
+    # All text in this figure is size 18 / bold (see the uniform pass below).
+    FONT = dict(fontsize=18, fontweight="bold")
+
+    ax_lat.set_xlabel("Target QPS", **FONT)
+    ax_lat.set_ylabel("Avg Latency (ms)", **FONT)
+    ax_lat.set_title("Average Latency", **FONT)
+    if not ax_lat.has_data():
+        ax_lat.text(0.5, 0.5, "No latency data", ha="center", va="center",
+                    transform=ax_lat.transAxes, color="gray", **FONT)
+
+    if all_sent_vals:
+        lo, hi = min(all_sent_vals), max(all_sent_vals)
+        ax_qc.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5,
+                   linewidth=0.8, label="Ideal")
+    ax_qc.set_xlabel("Queries Sent", **FONT)
+    ax_qc.set_ylabel("Answers Received", **FONT)
+    ax_qc.set_title("Queries Sent vs Answers Received", **FONT)
+
+    for ax in (ax_lat, ax_qc):
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=18)
+        for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
+            tick_label.set_fontweight("bold")
+        # Scientific-notation exponents (e.g. "1e6") are separate text objects
+        for offset in (ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text()):
+            offset.set_fontsize(18)
+            offset.set_fontweight("bold")
+
+    # Shared legend below the two panels
+    seen = {}
+    for ax in (ax_lat, ax_qc):
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in seen:
+                seen[label] = handle
+    if legend and seen:
+        ncol = min(len(seen), 4)
+        fig.legend(
+            seen.values(), seen.keys(),
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=ncol,
+            prop={"size": 18, "weight": "bold"},
+            frameon=False,
+        )
+
+    # Reserve bottom margin for the shared legend only when it is drawn.
+    fig.tight_layout(rect=[0, 0.08, 1, 1] if legend else None)
+    path = os.path.join(output_dir, "all_services_latency_qc.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    if not legend:
+        _save_standalone_legend(fig, path, ncol=min(len(seen), 4))
+    plt.close(fig)
+
+def _plot_load_impact_latency_qc_cpu(results, output_dir, legend: bool = True):
+    """Combined 1x3 chart: Avg Latency, Queries Sent vs Answers Received, CPU Total.
+
+    Same styling as _plot_load_impact_combined (color = DNS service,
+    marker + linestyle = tool), with every text element bold at size 18.
+    """
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    if not dns_services:
+        return
+    tools_present = sorted(set(row["tool"] for row in results))
+
+    COMBINED_TOOL_MARKERS = ["o", "s", "^", "D", "v"]
+    COMBINED_TOOL_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+
+    svc_color = {s: COMBINED_SERVICE_COLORS[i % len(COMBINED_SERVICE_COLORS)]
+                 for i, s in enumerate(dns_services)}
+    tool_marker = {t: COMBINED_TOOL_MARKERS[i % len(COMBINED_TOOL_MARKERS)]
+                   for i, t in enumerate(tools_present)}
+    tool_linestyle = {t: COMBINED_TOOL_LINESTYLES[i % len(COMBINED_TOOL_LINESTYLES)]
+                      for i, t in enumerate(tools_present)}
+
+    # Group once: tool -> dns_service -> target_qps -> [rows]
+    by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in results:
+        by_tool_svc_qps[row["tool"]][row["dns_service"]][row["target_qps"]].append(row)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), squeeze=False)
+    ax_lat, ax_qc, ax_cpu = axes[0][0], axes[0][1], axes[0][2]
+
+    all_sent_vals = []
+    for tool in tools_present:
+        for svc in dns_services:
+            if svc not in by_tool_svc_qps[tool]:
+                continue
+            svc_qps = by_tool_svc_qps[tool][svc]
+            label = svc
+            plot_kwargs = dict(
+                color=svc_color[svc],
+                marker=tool_marker[tool],
+                linestyle=tool_linestyle[tool],
+            )
+
+            x_vals = sorted(svc_qps.keys())
+
+            # Latency (ms) — only if tool reports it
+            has_latency = any(
+                r.get("avg_latency_s") is not None
+                for rows in svc_qps.values() for r in rows
+            )
+            if has_latency:
+                y_med, y_lo, y_hi = [], [], []
+                for qps in x_vals:
+                    lats = [r["avg_latency_s"] * 1000 for r in svc_qps[qps]
+                            if r.get("avg_latency_s") is not None]
+                    p1, median, p99 = _percentiles(lats, (1, 50, 99))
+                    y_med.append(median)
+                    y_lo.append(max(0.0, median - p1))
+                    y_hi.append(max(0.0, p99 - median))
+                ax_lat.errorbar(x_vals, y_med, yerr=[y_lo, y_hi],
+                                markersize=3, capsize=2, linewidth=1.2,
+                                label=label, **plot_kwargs)
+
+            # Queries Sent vs Answers Received
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
+            for qps in x_vals:
+                ms, slo, shi = _trial_median_p1_p99(svc_qps[qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(svc_qps[qps], "queries_completed")
+                sent_med.append(ms); sent_lo.append(slo); sent_hi.append(shi)
+                comp_med.append(mc); comp_lo.append(clo); comp_hi.append(chi)
+            ax_qc.errorbar(sent_med, comp_med,
+                           xerr=[sent_lo, sent_hi],
+                           yerr=[comp_lo, comp_hi],
+                           markersize=3, capsize=2, linewidth=1.2,
+                           label=label, **plot_kwargs)
+            all_sent_vals.extend(sent_med)
+
+            # CPU Total (%) — only where collectl data is present
+            xs, meds, lo_errs, hi_errs = [], [], [], []
+            for qps in x_vals:
+                rows = [r for r in svc_qps[qps]
+                        if r.get("cpu_totl_median_pct") is not None]
+                if not rows:
+                    continue
+                m, lo, hi = _trial_median_p1_p99(rows, "cpu_totl_median_pct")
+                xs.append(qps); meds.append(m); lo_errs.append(lo); hi_errs.append(hi)
+            if xs:
+                hi_errs = [min(h, max(0.0, 100.0 - m)) for h, m in zip(hi_errs, meds)]
+                ax_cpu.errorbar(xs, meds, yerr=[lo_errs, hi_errs],
+                                markersize=3, capsize=2, linewidth=1.2,
+                                label=label, **plot_kwargs)
+
+    # All text in this figure is size 18 / bold (see the uniform pass below).
+    FONT = dict(fontsize=18, fontweight="bold")
+
+    ax_lat.set_xlabel("Target QPS", **FONT)
+    ax_lat.set_ylabel("Avg Latency (ms)", **FONT)
+    ax_lat.set_title("Average Latency", **FONT)
+    if not ax_lat.has_data():
+        ax_lat.text(0.5, 0.5, "No latency data", ha="center", va="center",
+                    transform=ax_lat.transAxes, color="gray", **FONT)
+
+    if all_sent_vals:
+        lo, hi = min(all_sent_vals), max(all_sent_vals)
+        ax_qc.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5,
+                   linewidth=0.8, label="Ideal")
+    ax_qc.set_xlabel("Queries Sent", **FONT)
+    ax_qc.set_ylabel("Answers Received", **FONT)
+    ax_qc.set_title("Queries Sent vs Answers Received", **FONT)
+
+    ax_cpu.set_xlabel("Target QPS", **FONT)
+    ax_cpu.set_ylabel("CPU Total (%)", **FONT)
+    ax_cpu.set_title("CPU Utilization", **FONT)
+    if not ax_cpu.has_data():
+        ax_cpu.text(0.5, 0.5, "No CPU data", ha="center", va="center",
+                    transform=ax_cpu.transAxes, color="gray", **FONT)
+
+    for ax in (ax_lat, ax_qc, ax_cpu):
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=18)
+        for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
+            tick_label.set_fontweight("bold")
+        # Scientific-notation exponents (e.g. "1e6") are separate text objects
+        for offset in (ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text()):
+            offset.set_fontsize(18)
+            offset.set_fontweight("bold")
+
+    # Shared legend below the three panels
+    seen = {}
+    for ax in (ax_lat, ax_qc, ax_cpu):
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in seen:
+                seen[label] = handle
+    if legend and seen:
+        ncol = min(len(seen), 4)
+        fig.legend(
+            seen.values(), seen.keys(),
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=ncol,
+            prop={"size": 18, "weight": "bold"},
+            frameon=False,
+        )
+
+    # Reserve bottom margin for the shared legend only when it is drawn.
+    fig.tight_layout(rect=[0, 0.08, 1, 1] if legend else None)
+    path = os.path.join(output_dir, "all_services_latency_qc_cpu.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    if not legend:
+        _save_standalone_legend(fig, path, ncol=min(len(seen), 4))
+    plt.close(fig)
+
+def _plot_load_impact_qc_only(results, output_dir, legend: bool = True):
+    """Single-panel chart: Queries Sent vs Answers Received, all DNS services.
+
+    Same styling as _plot_load_impact_combined (color = DNS service,
+    marker + linestyle = tool), with every text element bold at size 18.
+    """
+    dns_services = sorted(set(row["dns_service"] for row in results))
+    if not dns_services:
+        return
+    tools_present = sorted(set(row["tool"] for row in results))
+
+    COMBINED_TOOL_MARKERS = ["o", "s", "^", "D", "v"]
+    COMBINED_TOOL_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+
+    svc_color = {s: COMBINED_SERVICE_COLORS[i % len(COMBINED_SERVICE_COLORS)]
+                 for i, s in enumerate(dns_services)}
+    tool_marker = {t: COMBINED_TOOL_MARKERS[i % len(COMBINED_TOOL_MARKERS)]
+                   for i, t in enumerate(tools_present)}
+    tool_linestyle = {t: COMBINED_TOOL_LINESTYLES[i % len(COMBINED_TOOL_LINESTYLES)]
+                      for i, t in enumerate(tools_present)}
+
+    # Group once: tool -> dns_service -> target_qps -> [rows]
+    by_tool_svc_qps = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in results:
+        by_tool_svc_qps[row["tool"]][row["dns_service"]][row["target_qps"]].append(row)
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    all_sent_vals = []
+    for tool in tools_present:
+        for svc in dns_services:
+            if svc not in by_tool_svc_qps[tool]:
+                continue
+            svc_qps = by_tool_svc_qps[tool][svc]
+            plot_kwargs = dict(
+                color=svc_color[svc],
+                marker=tool_marker[tool],
+                linestyle=tool_linestyle[tool],
+            )
+
+            sent_med, sent_lo, sent_hi = [], [], []
+            comp_med, comp_lo, comp_hi = [], [], []
+            for qps in sorted(svc_qps.keys()):
+                ms, slo, shi = _trial_median_p1_p99(svc_qps[qps], "queries_sent")
+                mc, clo, chi = _trial_median_p1_p99(svc_qps[qps], "queries_completed")
+                sent_med.append(ms); sent_lo.append(slo); sent_hi.append(shi)
+                comp_med.append(mc); comp_lo.append(clo); comp_hi.append(chi)
+            ax.errorbar(sent_med, comp_med,
+                        xerr=[sent_lo, sent_hi],
+                        yerr=[comp_lo, comp_hi],
+                        markersize=3, capsize=2, linewidth=1.2,
+                        label=svc, **plot_kwargs)
+            all_sent_vals.extend(sent_med)
+
+    # All text in this figure is size 18 / bold (see the uniform pass below).
+    FONT = dict(fontsize=18, fontweight="bold")
+
+    if all_sent_vals:
+        lo, hi = min(all_sent_vals), max(all_sent_vals)
+        ax.plot([lo, hi], [lo, hi], "--", color="gray", alpha=0.5,
+                linewidth=0.8, label="Ideal")
+    ax.set_xlabel("Queries Sent", **FONT)
+    ax.set_ylabel("Answers Received", **FONT)
+    ax.grid(True, alpha=0.3)
+    ax.tick_params(labelsize=18)
+    for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
+        tick_label.set_fontweight("bold")
+    # Scientific-notation exponents (e.g. "1e6") are separate text objects
+    for offset in (ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text()):
+        offset.set_fontsize(18)
+        offset.set_fontweight("bold")
+
+    handles, labels = ax.get_legend_handles_labels()
+    if legend and handles:
+        ax.legend(handles, labels, loc="upper left", frameon=False,
+                  prop={"size": 18, "weight": "bold"})
+
+    path = os.path.join(output_dir, "all_services_qps_comparison.pdf")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    if not legend:
+        _save_standalone_legend(fig, path, ncol=min(len(labels), 4))
     plt.close(fig)
 
 def _plot_load_impact_combined_full(results, output_dir, legend: bool = True):
