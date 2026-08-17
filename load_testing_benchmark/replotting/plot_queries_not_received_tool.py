@@ -10,6 +10,7 @@ Usage:
     python examples/plot_queries_not_received_tool.py --csv tmp/results.csv
     python examples/plot_queries_not_received_tool.py --csv tmp/results.csv --output-dir charts/
     python examples/plot_queries_not_received_tool.py --csv tmp/results.csv --max-qps 500000
+    python examples/plot_queries_not_received_tool.py --csv tmp/results.csv --no-legend
 """
 import argparse
 import csv
@@ -24,7 +25,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from benchmark.charts import _tool_style, _trial_median_p1_p99
+from benchmark.charts import (
+    _bold_axis_text,
+    _save_standalone_legend,
+    _tool_style,
+    _trial_median_p1_p99,
+)
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +54,7 @@ def load_from_csv(csv_path):
     return results
 
 
-def plot_queries_not_received_tool(results, output_dir):
+def plot_queries_not_received_tool(results, output_dir, legend: bool = True):
     os.makedirs(output_dir, exist_ok=True)
 
     by_tool_qps = defaultdict(lambda: defaultdict(list))
@@ -73,13 +79,18 @@ def plot_queries_not_received_tool(results, output_dir):
         ax.errorbar(x_vals, y_med, yerr=[y_lo, y_hi], markersize=4,
                     capsize=3, linewidth=1.5, label=tool, **style)
 
-    ax.set_xlabel("Requested QPS")
-    ax.set_ylabel("Replies Dropped/s")
-    #ax.legend(loc="upper left", frameon=False)
+    ax.set_xlabel("Requested QPS", fontsize=18, fontweight="bold")
+    ax.set_ylabel("Replies Dropped/s", fontsize=18, fontweight="bold")
+    if legend:
+        ax.legend(loc="upper left", frameon=False,
+                  prop={"size": 18, "weight": "bold"})
     ax.grid(True, alpha=0.3)
+    _bold_axis_text(ax)
 
     path = os.path.join(output_dir, "replies_dropped_by_tool_per_sec.pdf")
     fig.savefig(path, dpi=150, bbox_inches="tight")
+    if not legend:
+        _save_standalone_legend(fig, path, ncol=min(len(all_tools), 3))
     plt.close(fig)
     return path
 
@@ -93,6 +104,9 @@ def main():
                         help="Directory to save charts (default: charts/)")
     parser.add_argument("--max-qps", type=int, default=None,
                         help="Maximum requested QPS to include")
+    parser.add_argument("--no-legend", dest="legend", action="store_false",
+                        help="Omit the legend from the chart; it is written to a "
+                             "separate <chart>_legend.pdf instead (default: legend drawn)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -111,8 +125,11 @@ def main():
         log.error("No results to plot")
         sys.exit(1)
 
-    path = plot_queries_not_received_tool(results, args.output_dir)
+    path = plot_queries_not_received_tool(results, args.output_dir, legend=args.legend)
     log.info("Chart saved to %s", path)
+    if not args.legend:
+        stem, ext = os.path.splitext(path)
+        log.info("Legend saved to %s", f"{stem}_legend{ext}")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,9 @@ Usage:
     # Custom output directory:
     python examples/plot_qps_accuracy.py --csv results.csv --output-dir my_charts/
 
+    # Camera-ready charts with the legend written to a separate file:
+    python examples/plot_qps_accuracy.py --csv results.csv --no-legend
+
 The raw data directory should contain a timestamps/ subdirectory with files like:
     dnsperf_10000qps_trial0_timestamps.txt
 """
@@ -157,6 +160,9 @@ def main():
                         help="Seconds to trim from start and end of timestamps before computing metrics (default: 0)")
     parser.add_argument("--max-qps", type=int, default=None,
                         help="Maximum target QPS to include in charts")
+    parser.add_argument("--no-legend", dest="legend", action="store_false",
+                        help="Omit the legend from the charts; each legend is written "
+                             "to a separate <chart>_legend.pdf instead (default: legend drawn)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -208,8 +214,8 @@ def main():
     intervals_found = sorted(set(r["interval"] for r in results if r["interval"] != "N/A"))
     log.info("Tools: %s, Intervals: %s", tools_found, intervals_found)
 
-    plot_qps_accuracy(results, args.output_dir)
-    #plot_pps_accuracy(results, args.output_dir)
+    plot_qps_accuracy(results, args.output_dir, legend=args.legend)
+    #plot_pps_accuracy(results, args.output_dir, legend=args.legend)
     log.info("Charts saved to %s", args.output_dir)
 
 
