@@ -262,7 +262,7 @@ def main():
 
                 # Start this DNS service
                 start_dns_service(config, dns_service)
-                wait_for_dns_ready(config, timeout=30)
+                wait_for_dns_ready(config, timeout=300)
 
                 if warmup_cache:
                     try:

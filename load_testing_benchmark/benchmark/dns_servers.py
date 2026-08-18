@@ -68,7 +68,7 @@ def clear_dns_cache(config, service_name):
         )
 
 
-def ensure_dns_running(config, service_name, timeout=30):
+def ensure_dns_running(config, service_name, timeout=300):
     """Ensure the DNS service is up; (re)start it if it is not responding."""
     try:
         wait_for_dns_ready(config, timeout=timeout)
@@ -114,7 +114,7 @@ def warmup_dns_cache(config, qps=None, timeout=None):
         log.info("Cache warmup complete")
 
 
-def wait_for_dns_ready(config, timeout=30):
+def wait_for_dns_ready(config, timeout=300):
     """Poll until the DNS server on the resolver IP responds to queries.
 
     Uses dig to send a test query.
