@@ -82,7 +82,7 @@ def run_impact_test(config, tool, dns_service, qps, trial, store, script_name, s
             remote_trail = (
                 f"/tmp/collectl_{dns_service}_{tool.name}_{qps}_{trial}.txt"
             )
-            collectl_session = run_collectl_session(config, runtime, remote_trail)
+            collectl_session = run_collectl_session(config, runtime, remote_trail, collectl_margin)
             collectl_local_path = os.path.join(
                 store._ensure_dir(script_name, "collectl"),
                 f"{dns_service}_{tool.name}_{qps}qps_trial{trial}.collectl.txt",
