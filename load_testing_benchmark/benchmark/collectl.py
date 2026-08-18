@@ -59,15 +59,13 @@ def collect_collectl_file(config, remote_file, local_path):
     return local_path
 
 
-def run_collectl_session(config, runtime_s, remote_output):
+def run_collectl_session(config, runtime_s, remote_output, margin: int):
     """Start collectl and wait the margin so sampling is warm before the tool.
 
     duration = runtime_s + 2 * margin (cover pre-tool and post-tool windows).
     Returns {proc, output_file, duration, margin}.
     """
-    s3 = config.get("script3", {}) or {}
-    margin = int(s3.get("collectl_margin", 5))
-    duration = int(runtime_s) + 2 * margin
+    duration = runtime_s + 2 * margin
 
     proc = start_collectl(config, duration, remote_output)
 
