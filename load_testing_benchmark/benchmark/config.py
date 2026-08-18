@@ -148,6 +148,104 @@ def add_script3_args(parser):
     )
 
 
+def add_max_sustainable_qps_args(parser):
+    """Add max sustainable QPS search specific arguments."""
+    parser.add_argument("--initial-qps", type=int, help="Starting QPS for the exponential ramp")
+    parser.add_argument("--min-qps-step", type=int,
+                        help="Search resolution; all QPS values are integer multiples of this")
+    parser.add_argument("--max-qps", type=int, help="Ceiling QPS the search will never exceed")
+    parser.add_argument("--num-trials", type=int, default=10, help="Maximum trials per QPS level")
+    parser.add_argument("--min-passes", type=int, help="Passing trials required for a level to pass")
+    parser.add_argument("--trial-duration", type=int, default=60, help="Seconds per trial (default: 60)")
+    parser.add_argument("--answer-rate-threshold", type=float, default=99.0,
+                        help="Answer rate percent a trial must meet to pass (default: 99.0)")
+    parser.add_argument("--min-qps-fidelity-pct", type=float, default=99.0,
+                        help="Warn when the tool sends less than this percent of the "
+                             "requested queries (default: 99.0). Advisory only.")
+    parser.add_argument("--dns-service", help="Single DNS service to evaluate")
+    parser.add_argument("--tool", help="Single load-generation tool to use")
+    parser.add_argument(
+        "--clear-cache",
+        dest="clear_cache",
+        action="store_true",
+        default=None,
+        help="Clear the resolver cache before every trial (resolvers only)",
+    )
+    parser.add_argument(
+        "--no-clear-cache",
+        dest="clear_cache",
+        action="store_false",
+        help="Disable per-trial cache clearing",
+    )
+    parser.add_argument(
+        "--warmup-cache",
+        dest="warmup_cache",
+        action="store_true",
+        default=None,
+        help="Pre-populate the resolver cache with one dnsperf pass before every trial",
+    )
+    parser.add_argument(
+        "--no-warmup-cache",
+        dest="warmup_cache",
+        action="store_false",
+        help="Disable per-trial cache warmup",
+    )
+    parser.add_argument(
+        "--collectl",
+        dest="collectl",
+        action="store_true",
+        default=None,
+        help="Run collectl on the DNS server during each trial and save the trail",
+    )
+    parser.add_argument(
+        "--no-collectl",
+        dest="collectl",
+        action="store_false",
+        help="Disable collectl monitoring",
+    )
+    parser.add_argument(
+        "--collectl-margin",
+        type=int,
+        default=5,
+        help="Seconds collectl starts before and continues after each trial (default: 5)",
+    )
+    parser.add_argument(
+        "--simulate-max-qps",
+        type=int,
+        default=None,
+        help="Self-test mode: skip all remote execution and treat a level as passing "
+             "iff its QPS is <= this value. Exercises the search algorithm offline.",
+    )
+
+
+def apply_max_sustainable_qps_overrides(config, args):
+    """Apply max sustainable QPS search CLI overrides."""
+    m = config.setdefault("max_sustainable_qps", {})
+    overrides = {
+        "initial_qps": args.initial_qps,
+        "min_qps_step": args.min_qps_step,
+        "max_qps": args.max_qps,
+        "num_trials": args.num_trials,
+        "min_passes": args.min_passes,
+        "trial_duration": args.trial_duration,
+        "answer_rate_threshold": args.answer_rate_threshold,
+        "min_qps_fidelity_pct": args.min_qps_fidelity_pct,
+        "clear_cache": getattr(args, "clear_cache", None),
+        "warmup_cache": getattr(args, "warmup_cache", None),
+        "collectl": getattr(args, "collectl", None),
+        "collectl_margin": getattr(args, "collectl_margin", None),
+    }
+    for key, value in overrides.items():
+        if value is not None:
+            m[key] = value
+
+    if getattr(args, "dns_service", None):
+        config.setdefault("dns_services", {})["services"] = [args.dns_service]
+    if getattr(args, "tool", None):
+        config["tools"] = [args.tool]
+    return config
+
+
 def apply_script1_overrides(config, args):
     """Apply Script 1 CLI overrides."""
     s1 = config.setdefault("script1", {})

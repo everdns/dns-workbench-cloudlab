@@ -149,6 +149,58 @@ If `collectl` fails to start, isn't installed, or a trail file can't be parsed, 
 
 **Output:** the median/peak columns are appended to `results.csv` / `results.json`, raw per-run trail files are saved under `load_impact/collectl/`, and per-service CPU/memory/network resource charts are generated alongside the latency/answer-rate charts.
 
+### Max Sustainable QPS Evaluation
+
+Determines the highest QPS at which a DNS server still satisfies a configurable answer-rate threshold. Unlike Script 1/3, which sweep a fixed QPS ladder, this converges on the knee and reduces the ammount of QPS values that need to be tested.
+
+```sh
+python3 scripts/max_sustainable_qps.py --config configs/config_resolver.yaml \
+  --dns-service resolver_unbound --tool kxdpgun-dnsworkbench
+```
+
+Exactly **one** DNS service and **one** load-generation tool per invocation. The service is started before the search and stopped afterwards, as in Script 3.
+
+The search runs in two phases over QPS *indices*, so every QPS tested is an exact integer multiple of `min_qps_step`:
+
+1. **Exponential ramp** — start at `initial_qps` and double until a level fails, establishing an upper bound. Levels are clamped to `max_qps`; if the ceiling itself passes, the search finishes early and the result is reported as a **lower bound**.
+2. **Binary search** — narrow between the last passing and first failing level until they meet.
+
+Levels already resolved in phase 1 are never re-tested in phase 2.
+
+A **level** passes when `min_passes` of up to `num_trials` trials each reach the answer-rate threshold. Each level terminates as soon as its outcome is determined: with `num_trials: 10` and `min_passes: 9`, a level passes on the 9th passing trial and fails on the 2nd failing one.
+
+Configure it under `max_sustainable_qps`:
+
+```yaml
+max_sustainable_qps:
+  initial_qps: 100000          # starting point for the ramp; must divide by min_qps_step
+  min_qps_step: 10000          # search resolution
+  max_qps: 3000000             # ceiling the search never exceeds
+  num_trials: 10               # max trials per level
+  min_passes: 9                # passing trials needed for the level to pass
+  trial_duration: 60           # seconds per trial
+  answer_rate_threshold: 99.9  # percent of queries that must be answered NOERROR
+  min_qps_fidelity_pct: 99.0   # warn if the tool sends less than this share of the requested load
+  clear_cache: false           # clear the resolver cache before every trial
+  warmup_cache: false          # pre-populate the cache before every trial
+  collectl: false              # sample the server during every trial
+  collectl_margin: 5
+```
+
+Every key can be overridden on the CLI (`--initial-qps`, `--min-qps-step`, `--max-qps`, `--num-trials`, `--min-passes`, `--trial-duration`, `--answer-rate-threshold`, `--clear-cache` / `--no-clear-cache`, `--warmup-cache` / `--no-warmup-cache`, `--collectl` / `--no-collectl`, `--collectl-margin`). Parameters are validated up front, and an invalid combination exits with status 2 before any load is generated.
+
+`--simulate-max-qps N` runs the search with no remote execution at all, treating a level as passing iff its QPS is `<= N`. Useful for checking the search parameters (how many levels a given `initial_qps`/`min_qps_step` will visit, and therefore how long a real run will take) without touching the testbed.
+
+Unlike Script 3, `clear_cache` and `warmup_cache` are independent and apply **per trial**: when both are set the cache is cleared and then warmed before every trial, giving each trial an identical starting state.
+
+**Output:** three CSVs, rewritten after every level so an interrupted run still leaves complete data on disk.
+
+- `trial_results.csv` — one row per trial: `dns_service, tool, target_qps, trial, achieved_qps, queries_sent, queries_completed, queries_lost, answer_rate_pct`, plus `passed`, `qps_fidelity_pct`, `status`, and latency/collectl columns.
+- `level_tests.csv` — one row per QPS level: `target_qps, num_trials, num_passes, num_fails, average_achieved_qps, average_answer_rate_pct, passed`. `num_trials` is the number actually run (early termination), with the configured cap in `max_trials`.
+- `search_summary.csv` / `.json` — one row: `max_qps_passed, max_qps_tested, num_qps_values_tested`, plus the search parameters, `hit_max_qps_ceiling`, `total_trials_run`, and `search_duration_s`.
+
+`answer_rate_pct` counts only **NOERROR** replies, so SERVFAIL responses count as unanswered. `qps_fidelity_pct` is the share of the requested queries the tool actually sent; when it drops below `min_qps_fidelity_pct` a warning is logged, because a load generator that cannot reach the requested rate will show a high answer rate that overstates server capacity. It is advisory and never affects pass/fail.
+
 ## Common Options
 
 All scripts share these flags:
@@ -182,12 +234,19 @@ results/
 │   ├── results.csv
 │   ├── results.json
 │   └── charts/
-└── load_impact/
+├── load_impact/
+│   ├── raw/
+│   ├── collectl/                # raw collectl trail files per run (if enabled)
+│   ├── results.csv
+│   ├── results.json
+│   └── charts/
+└── max_sustainable_qps/
     ├── raw/
-    ├── collectl/                # raw collectl trail files per run (if enabled)
-    ├── results.csv
-    ├── results.json
-    └── charts/
+    ├── collectl/
+    ├── trial_results.csv        # one row per trial
+    ├── level_tests.csv          # one row per QPS level
+    ├── search_summary.csv       # one row: the max sustainable QPS
+    └── search_summary.json
 ```
 
 ## Tool Names for --tools

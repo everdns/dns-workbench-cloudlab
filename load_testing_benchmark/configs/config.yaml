@@ -69,3 +69,17 @@ script3:
     dns64perfpp-dnsworkbench: 2000000
     kxdpgun: 2000000
     kxdpgun-dnsworkbench: 2000000
+
+max_sustainable_qps:
+  initial_qps: 100000
+  min_qps_step: 10000
+  max_qps: 3000000
+  num_trials: 10
+  min_passes: 9
+  trial_duration: 60
+  answer_rate_threshold: 99.9
+  min_qps_fidelity_pct: 99.0
+  clear_cache: false
+  warmup_cache: false
+  collectl: false
+  collectl_margin: 5
