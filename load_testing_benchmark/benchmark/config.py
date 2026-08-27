@@ -52,7 +52,7 @@ def apply_cli_overrides(config, args):
 
 def add_common_args(parser):
     """Add common CLI arguments shared across all scripts."""
-    parser.add_argument("--config", default=None, help="Path to config YAML file")
+    parser.add_argument("--config", help="Path to config YAML file")
     parser.add_argument("--server", help="Server host (user@host)")
     parser.add_argument("--clients", nargs="+",
                         help="Load-generation client hosts (user@host or localhost); "
@@ -74,7 +74,7 @@ def add_common_args(parser):
     parser.add_argument("--tools", nargs="+", help="Subset of tools to test")
     parser.add_argument("--output-dir", default="results", help="Output directory for results")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
-    parser.add_argument("--recieve-only", action="store_true", default=None, help="Run dns_responder in receive-only mode (no responses sent)")
+    parser.add_argument("--recieve-only", action="store_true", help="Run dns_responder in receive-only mode (no responses sent)")
     parser.add_argument("--dns-responder-batch-size", type=int, help="Batch size for dns_responder (-b flag)")
 
 def add_script1_args(parser):
@@ -105,7 +105,6 @@ def add_script3_args(parser):
         "--clear-cache",
         dest="clear_cache",
         action="store_true",
-        default=None,
         help="Clear the resolver cache before each tool run (resolvers only)",
     )
     parser.add_argument(
@@ -118,7 +117,6 @@ def add_script3_args(parser):
         "--warmup-cache",
         dest="warmup_cache",
         action="store_true",
-        default=None,
         help="Pre-populate resolver cache with one dnsperf pass through the input file (ignored if --clear-cache is set)",
     )
     parser.add_argument(
@@ -131,7 +129,6 @@ def add_script3_args(parser):
         "--collectl",
         dest="collectl",
         action="store_true",
-        default=None,
         help="Run collectl on the DNS server during each tool invocation and save the trail",
     )
     parser.add_argument(
@@ -143,7 +140,6 @@ def add_script3_args(parser):
     parser.add_argument(
         "--collectl-margin",
         type=int,
-        default=None,
         help="Seconds collectl starts before and continues after each tool run (default: 5)",
     )
 
@@ -154,12 +150,12 @@ def add_max_sustainable_qps_args(parser):
     parser.add_argument("--min-qps-step", type=int,
                         help="Search resolution; all QPS values are integer multiples of this")
     parser.add_argument("--max-qps", type=int, help="Ceiling QPS the search will never exceed")
-    parser.add_argument("--num-trials", type=int, default=10, help="Maximum trials per QPS level")
+    parser.add_argument("--num-trials", type=int, help="Maximum trials per QPS level")
     parser.add_argument("--min-passes", type=int, help="Passing trials required for a level to pass")
-    parser.add_argument("--trial-duration", type=int, default=60, help="Seconds per trial (default: 60)")
-    parser.add_argument("--answer-rate-threshold", type=float, default=99.0,
+    parser.add_argument("--trial-duration", type=int, help="Seconds per trial (default: 60)")
+    parser.add_argument("--answer-rate-threshold", type=float,
                         help="Answer rate percent a trial must meet to pass (default: 99.0)")
-    parser.add_argument("--min-qps-fidelity-pct", type=float, default=99.0,
+    parser.add_argument("--min-qps-fidelity-pct", type=float,
                         help="Warn when the tool sends less than this percent of the "
                              "requested queries (default: 99.0). Advisory only.")
     parser.add_argument("--dns-service", help="Single DNS service to evaluate")
@@ -168,7 +164,6 @@ def add_max_sustainable_qps_args(parser):
         "--clear-cache",
         dest="clear_cache",
         action="store_true",
-        default=None,
         help="Clear the resolver cache before every trial (resolvers only)",
     )
     parser.add_argument(
@@ -181,7 +176,6 @@ def add_max_sustainable_qps_args(parser):
         "--warmup-cache",
         dest="warmup_cache",
         action="store_true",
-        default=None,
         help="Pre-populate the resolver cache with one dnsperf pass before every trial",
     )
     parser.add_argument(
@@ -194,7 +188,6 @@ def add_max_sustainable_qps_args(parser):
         "--collectl",
         dest="collectl",
         action="store_true",
-        default=None,
         help="Run collectl on the DNS server during each trial and save the trail",
     )
     parser.add_argument(
@@ -206,13 +199,11 @@ def add_max_sustainable_qps_args(parser):
     parser.add_argument(
         "--collectl-margin",
         type=int,
-        default=5,
         help="Seconds collectl starts before and continues after each trial (default: 5)",
     )
     parser.add_argument(
         "--simulate-max-qps",
         type=int,
-        default=None,
         help="Self-test mode: skip all remote execution and treat a level as passing "
              "iff its QPS is <= this value. Exercises the search algorithm offline.",
     )
