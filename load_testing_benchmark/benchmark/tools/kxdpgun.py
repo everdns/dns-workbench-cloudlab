@@ -17,7 +17,7 @@ class Kxdpgun(Tool):
         return (
             f"sudo kxdpgun -t {runtime} -Q {qps} -b 1"
             f" -i {input_file} -I {interface}"
-            f" {server}"
+            f" {server} --mode copy"
         )
 
     def parse_output(self, stdout):
