@@ -1,0 +1,77 @@
+# Shared configuration for both optimizers. The grid driver and the agent driver
+# read the identical file, so neither can be given an advantage by accident.
+
+hosts:
+  server: 10.10.1.2
+  # Load generators. A single client is usually the binding constraint at these
+  # rates -- if the generator saturates before BIND does, every candidate scores
+  # the same and no amount of tuning moves the metric. Use both test hosts.
+  clients:
+    - 10.10.1.3
+    - 10.10.1.4
+
+paths:
+  # The max_sustainable_qps config used for every evaluation. Both optimizers
+  # must use the same one for their results to be comparable.
+  eval_config: /local/repository/load_testing_benchmark/configs/tuning.yaml
+
+  # Host facts (nproc, ethtool maxima), fetched from the name server so the
+  # workstation clamps values the same way the host does. Populate with:
+  #   scp 10.10.1.2:/usr/local/lib/dns-tuner/facts.json ~/.dns-tuner-facts.json
+  facts: ~/.dns-tuner-facts.json
+
+  staging_remote: /var/lib/dns-tuner/staging/candidate.json
+  apply_cmd: sudo /usr/local/sbin/dns_tuner_apply
+
+evaluation:
+  dns_service: ns_bind
+  tool: dnsperf
+
+  # Seconds between applying a config and starting to measure. Consecutive
+  # evaluations are not independent -- page cache, CPU frequency, and NIC ring
+  # state all carry over -- so give the host a moment to settle.
+  settle_seconds: 15
+
+  # Start the search ramp near the incumbent rather than from the config
+  # default. Phase 1 doubles from initial_qps, so starting at 50k when the
+  # answer is ~700k wastes four levels. Binary search converges to the same
+  # boundary regardless of where the ramp began, so this costs no accuracy.
+  # Never raise this above 1.0: seeding past the incumbent makes phase 1 fail
+  # immediately and phase 2 bisect the whole range, which is strictly worse.
+  ramp_seed_fraction: 0.5
+
+  # collectl adds 2 x collectl_margin seconds per trial (~20% of wall clock) and
+  # does not affect max_qps_passed. Leave it off for bulk grid points; turn it
+  # on for the baseline and the finalists, where the CPU/NIC traces explain why.
+  collectl: false
+
+  # Multiplier on the computed per-evaluation timeout.
+  timeout_slack: 1.5
+
+  # Shared across runs on the NFS home, so a grid run and an agent run that
+  # happen to test the same configuration measure it once between them.
+  cache_dir: ~/dns_tuner_cache
+
+  # Used only for the --dry-run wall-clock estimate. Replace with the measured
+  # value after the first real evaluation.
+  estimated_minutes: 25
+
+budget:
+  max_evals: 25
+  max_wall_clock_minutes: 240
+  # Three applies in a row that will not start means the proposer has wandered
+  # somewhere unusable; stop rather than discover that one candidate at a time.
+  max_consecutive_apply_failures: 3
+  max_consecutive_infra_errors: 2
+  max_duplicate_proposals: 5
+  max_model_turns: 80
+  max_api_cost_usd: 50.0
+
+agent:
+  model: claude-opus-5
+  effort: high
+  max_tokens: 16000
+  # Measured in Phase 5 calibration: the standard deviation of repeated
+  # baseline evaluations. Until it is filled in, the agent is told to treat one
+  # min_qps_step as the smallest meaningful difference.
+  noise_floor_qps: null

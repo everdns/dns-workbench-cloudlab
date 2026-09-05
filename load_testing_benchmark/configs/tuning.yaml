@@ -1,0 +1,82 @@
+# Evaluation config for the BIND config-tuning campaigns (config_tuner/).
+#
+# Derived from config2.yaml, with two differences that matter:
+#
+#   1. Two load-generation clients, not localhost. At these rates a single
+#      generator is usually the binding constraint, and if the generator
+#      saturates before BIND does then every candidate configuration scores the
+#      same and no amount of tuning moves the metric. Confirm qps_fidelity_pct
+#      has headroom on the baseline before spending a campaign.
+#
+#   2. A max_sustainable_qps section, which config2.yaml lacks. Both optimizers
+#      read this file, so the settings below define what a "measurement" means
+#      for the whole study -- change them and earlier runs stop being comparable
+#      (the tuner records this file's sha256 in every ledger row and refuses to
+#      resume across a change).
+
+hosts:
+  server: 10.10.1.2
+  clients:
+    - 10.10.1.3
+    - 10.10.1.4
+
+# Verify these against the actual NICs before the first run:
+#   ip -o -4 addr show | awk '$4 ~ /^10\.10\./ {print $2, $4}'
+server_interface: enp1s0d1
+client_interface: enp1s0d1
+
+input_files:
+  dnsperf: /local/repository/dnsperf_input
+  dnspyre: /local/repository/dnspyre_input
+
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+  clear_cache_script: /local/repository/clear_cache.sh
+  services:
+    - ns_bind
+
+tools:
+  - dnsperf
+
+threads: 8
+ports_per_thread: 256
+timeout: 1
+runtime: 10
+pause_between_runs: 5
+
+max_sustainable_qps:
+  # The ramp start. The tuner overrides this per evaluation, seeding from the
+  # incumbent best so phase 1 does not waste four doublings climbing back to
+  # where it already knows the answer lies.
+  initial_qps: 50000
+
+  # Measurement resolution. Differences smaller than this are not observable,
+  # whatever their true size -- the noise-floor calibration is interpreted
+  # against this number.
+  min_qps_step: 10000
+
+  # Raise this once the baseline is known. A result that hits the ceiling is a
+  # LOWER BOUND, not a maximum, and cannot be ranked against uncensored results.
+  max_qps: 2000000
+
+  # Full fidelity: 4 of 5 trials must hold the answer-rate threshold.
+  num_trials: 5
+  min_passes: 4
+  trial_duration: 10
+  answer_rate_threshold: 99.0
+
+  # Below this, the load generator did not send what was asked and the result
+  # describes the generator rather than the server. The tuner flags such a
+  # result and refuses to let it become the incumbent best.
+  min_qps_fidelity_pct: 99.0
+
+  clear_cache: false
+  warmup_cache: false
+
+  # collectl costs 2 x margin seconds per trial (~20% of wall clock) and does
+  # not change max_qps_passed. The tuner overrides this per evaluation: off for
+  # bulk points, on for the baseline and the finalists where the CPU and NIC
+  # traces are the explanatory data.
+  collectl: true
+  collectl_margin: 5

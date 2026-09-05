@@ -1,0 +1,36 @@
+# The head-to-head grid space.
+#
+# Deliberately small. At roughly 25 minutes per full-fidelity evaluation, a
+# 3^3 factorial is already 12-14 hours of exclusive testbed time and 3^4 is
+# about 34 hours, so the exhaustive baseline has to stay in the 16-27 point
+# range to be runnable at all.
+#
+# The agent is pointed at this same file with --space-mode grid, which narrows
+# its tool schema to exactly these values. Both optimizers then search an
+# identical finite set, so "the agent needed fewer evaluations" cannot be
+# explained away by the agent having had a larger space.
+
+space:
+  # Expected to be the largest structural effect: worker threads.
+  named_threads: [8, 16, 32]
+
+  # Expected to be a clear free win -- logging every query costs syslog I/O on
+  # the hot path, and nothing about the answer changes.
+  querylog: ["yes", "no"]
+
+  # A semantic knob, included on purpose. If it wins, that is a benchmarking
+  # artifact rather than a speedup, and the ledger's changes_semantics flag will
+  # say so in the write-up.
+  minimal_responses: ["no", "no-auth"]
+
+  # OS-side: the queue between the NIC and the stack.
+  netdev_max_backlog: [1000, 50000, 250000]
+
+# All schema defaults. The driver always measures this first, and every other
+# result is reported as a delta against it.
+baseline: {}
+
+exclude:
+  # 32 threads with the stock 1000-packet backlog is a configuration that starves
+  # itself; not worth 25 minutes to confirm.
+  - "named_threads == 32 and netdev_max_backlog == 1000"

@@ -1,0 +1,89 @@
+# Synthetic response surface for offline testing.
+#
+# A single real evaluation costs 20-30 minutes of exclusive testbed time, which
+# makes it a hopeless way to debug a search loop, a budget guard, or a resume
+# path. This file declares a cheap stand-in so both optimizers, the ledger,
+# resume, the kill switch, and every figure can be exercised on a laptop.
+#
+#     python3 config_tuner/grid_search.py --simulate config_tuner/configs/surface_bind.yaml ...
+#
+# Note that --simulate does NOT bypass the evaluator subprocess. The score below
+# is handed to the real max_sustainable_qps.py as --simulate-max-qps, so the real
+# script runs its real two-phase search and writes real artifacts. Only the
+# remote execution is faked.
+#
+# The magnitudes here are a plausible guess, not measurements. Replace them once
+# Phase 5 calibration has run -- especially `noise.sigma_pct`, which should be
+# the measured standard deviation of repeated baseline evaluations. A surface
+# whose noise is smaller than reality will make both optimizers look better than
+# they are.
+
+base_qps: 620000
+
+effects:
+  # Logging every query on the hot path costs real syslog I/O, and nothing about
+  # the answer changes. Expected to be the clearest free win.
+  querylog:
+    "yes": -90000
+    "no": 0
+
+  # Semantic: fewer bytes and less work per response, but a different wire
+  # answer. Modelled as a genuine gain so the study has to confront the
+  # free-win-versus-tradeoff distinction rather than never encountering it.
+  minimal_responses:
+    "no": 0
+    "no-auth": 55000
+    "no-auth-recursive": 52000
+    "yes": 60000
+
+  answer_cookie:
+    "yes": 0
+    "no": 18000
+
+  zone_statistics:
+    "full": -12000
+    "terse": 0
+    "none": 6000
+
+  # The dominant structural knob: steep gains to a knee near the core count,
+  # then a mild penalty for over-provisioning.
+  named_threads:
+    curve: saturating
+    knee: 16
+    gain: 90000
+    penalty_beyond: -4000
+
+  netdev_max_backlog:
+    curve: log
+    gain: 9000
+    ref: 50000
+
+  udp_receive_buffer:
+    curve: log
+    gain: 12000
+    ref: 1048576
+
+  nic_rx_ring:
+    curve: log
+    gain: 7000
+    ref: 2048
+
+# Response sections and worker threads interact: trimming per-response work
+# helps more when there are enough threads to exploit it.
+interactions:
+  - [minimal_responses, named_threads, 0.15]
+
+noise:
+  # Replace with the measured baseline standard deviation from Phase 5.
+  sigma_pct: 1.5
+  seed: 7
+
+# The real metric is quantized to min_qps_step, so anything finer is invisible
+# there and must be invisible here too.
+quantize_to: 10000
+
+# Exercises the apply-failure and rollback paths. Must be a schema-VALID
+# candidate, or canonical() rejects it before the applier is ever reached and
+# the path goes untested.
+fail_to_start:
+  - {named_threads: 64}

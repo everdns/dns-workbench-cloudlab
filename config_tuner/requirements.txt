@@ -1,0 +1,8 @@
+# The tuner reuses load_testing_benchmark/benchmark/*, so that package's
+# requirements (pyyaml, matplotlib) apply here too.
+pyyaml>=6.0
+matplotlib>=3.7
+
+# Only agent_search.py needs this. grid_search.py runs without it, so the
+# grid baseline can be produced on a host with no API access.
+anthropic>=1.0

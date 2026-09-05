@@ -1,0 +1,55 @@
+hosts:
+  server: 10.10.1.2
+  clients:
+    - localhost
+
+server_interface: enp94s0f1
+client_interface: enp94s0f1
+
+input_files:
+  dnsperf: /local/repository/dnsperf_input
+  dnspyre: /local/repository/dnspyre_input
+
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+  clear_cache_script: /local/repository/clear_cache.sh
+  services:
+    - ns_bind
+    - ns_powerdns
+    - ns_knot
+    - ns_nsd
+    - ns_unbound
+
+tools:
+  - dnsperf
+
+threads: 40
+ports_per_thread: 256
+timeout: 1
+runtime: 10
+pause_between_runs: 5
+
+script3:
+  warmup_cache: false
+  clear_cache: false
+  collectl: true
+  collectl_margin: 5
+  min_qps:   50000
+  max_qps: 1000000
+  qps_step:  50000
+  trials: 5
+
+max_sustainable_qps:
+  initial_qps:  50000
+  min_qps_step: 10000
+  max_qps: 1000000
+  num_trials: 5
+  min_passes: 4
+  trial_duration: 10
+  answer_rate_threshold: 99.0
+  min_qps_fidelity_pct: 99.0
+  clear_cache: false
+  warmup_cache: false
+  collectl: true
+  collectl_margin: 5

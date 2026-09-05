@@ -1,0 +1,27 @@
+# Installed to /etc/sudoers.d/dns-tuner by install_tuner.sh, which substitutes
+# @TUNER_USER@ and validates the result with `visudo -cf` before moving it into
+# place. Do not edit /etc/sudoers.d/dns-tuner directly -- edit this file and
+# re-run install_tuner.sh.
+#
+# Every entry names a root-owned absolute path under /usr/local, never anything
+# inside /local/repository: that checkout is writable by the experiment user, so
+# whitelisting a script there would grant nothing.
+#
+# sudo matches argv exactly. There are no wildcards, so
+# `dns_tuner_apply apply --config /tmp/evil` is denied, and the helper itself
+# takes no path arguments.
+#
+# `rollback` is deliberately NOT listed. Only the deadman systemd timer (running
+# as root already) and the helper's own error paths invoke it.
+
+Cmnd_Alias DNS_TUNER = /usr/local/sbin/dns_tuner_apply apply-and-stop, \
+                       /usr/local/sbin/dns_tuner_apply apply,          \
+                       /usr/local/sbin/dns_tuner_apply baseline,       \
+                       /usr/local/sbin/dns_tuner_apply status,         \
+                       /local/repository/start_dns_service.sh ns_bind, \
+                       /local/repository/stop_dns_service.sh ns_bind,  \
+                       /local/repository/stop_dns_service.sh
+
+Defaults!DNS_TUNER   !requiretty, env_reset
+
+@TUNER_USER@ ALL=(root) NOPASSWD: DNS_TUNER
