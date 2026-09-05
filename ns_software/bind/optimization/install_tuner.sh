@@ -75,9 +75,12 @@ say "installed root-owned helper, schema, and probe under $LIB and $SBIN"
 # The staging dir must be writable by the tuner user (it scp's the candidate
 # there) but readable-only by root thereafter.
 if [ -n "$TUNER_USER" ] && id "$TUNER_USER" >/dev/null 2>&1; then
-    chown "$TUNER_USER":"$TUNER_USER" "$STATE/staging"
+    # Do not assume the primary group matches the username. CloudLab accounts
+    # belong to a project group (e.g. dnsworkbench-PG0), so `user:user` fails.
+    TUNER_GROUP=$(id -gn "$TUNER_USER" 2>/dev/null || echo "")
+    chown "$TUNER_USER${TUNER_GROUP:+:$TUNER_GROUP}" "$STATE/staging"
     chmod 0755 "$STATE"
-    say "staging dir writable by '$TUNER_USER'"
+    say "staging dir writable by '$TUNER_USER' (group '${TUNER_GROUP:-unchanged}')"
 else
     say "WARNING: could not determine the tuner user; set staging ownership by hand"
 fi
