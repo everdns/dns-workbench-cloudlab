@@ -315,7 +315,10 @@ cmd_apply() {
 
     wait_healthy || rollback_or_fatal "health probe failed after restart" 5
 
-    bash "$CONFORMANCE" >"$RENDER_DIR/conformance.log" 2>&1 || {
+    # EXPECT_TUNER_MANAGED: we just rendered and installed this config, so the
+    # generated header must be present. Its absence would mean something
+    # overwrote the file between install and probe.
+    EXPECT_TUNER_MANAGED=yes bash "$CONFORMANCE" >"$RENDER_DIR/conformance.log" 2>&1 || {
         log "$(cat "$RENDER_DIR/conformance.log")"
         rollback_or_fatal "conformance probe failed" 7
     }
