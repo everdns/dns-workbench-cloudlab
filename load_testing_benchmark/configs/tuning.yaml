@@ -37,7 +37,7 @@ dns_services:
     - ns_bind
 
 tools:
-  - dnsperf
+  - kxdpgun
 
 threads: 8
 ports_per_thread: 256
