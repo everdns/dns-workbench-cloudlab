@@ -183,26 +183,70 @@ if [ "$DEADMAN_TEST" = true ]; then
     cp "$SCRATCH/good.json" "$STAGING"
     sudo "$APPLY" apply > "$SCRATCH/dm.out" 2>&1 &
     APPLY_PID=$!
-    sleep 4
-    # Kill the apply mid-flight, simulating a candidate that wedges the host.
-    sudo pkill -9 -f 'dns_tuner_apply apply' 2>/dev/null || true
-    wait $APPLY_PID 2>/dev/null || true
 
-    if systemctl is-active --quiet dns-tuner-deadman.timer 2>/dev/null; then
-        ok "deadman is armed after the apply was killed"
-        info "waiting up to 210s for the unattended rollback..."
-        for _ in $(seq 1 42); do
-            sleep 5
-            systemctl is-active --quiet dns-tuner-deadman.timer 2>/dev/null || break
-        done
-        sleep 10
-        if [ -n "$(dig +short +timeout=2 @127.0.0.1 ns1.workbench.lan A 2>/dev/null)" ]; then
-            ok "the host recovered on its own after the deadman fired"
-        else
-            bad "the host did NOT recover -- do not run unattended campaigns"
+    dump_apply_log() {
+        info "--- dns_tuner_apply apply output ---"
+        sed 's/^/         /' "$SCRATCH/dm.out"
+    }
+
+    # Wait for the apply to actually arm, rather than sleeping a fixed interval
+    # and hoping. A fixed sleep conflates three different failures under one
+    # message: the apply aborted before arming, the apply armed and then
+    # finished (disarming) inside the sleep, or arming itself failed.
+    armed=false
+    for _ in $(seq 1 60); do
+        if systemctl is-active --quiet dns-tuner-deadman.timer 2>/dev/null; then
+            armed=true; break
         fi
+        kill -0 "$APPLY_PID" 2>/dev/null || break   # exited before we saw it armed
+        sleep 1
+    done
+
+    if [ "$armed" = false ]; then
+        # If it is somehow still running unarmed, stop it before the cleanup
+        # trap's `baseline` starts fighting it for the host lock. This is safe:
+        # a failure to arm aborts via die 4 *before* anything in /etc is touched.
+        if kill -0 "$APPLY_PID" 2>/dev/null; then
+            sudo pkill -9 -f '[d]ns_tuner_apply apply' 2>/dev/null || true
+        fi
+        wait $APPLY_PID 2>/dev/null; rc=$?
+        bad "the apply never armed the deadman (exited $rc before arming)"
+        dump_apply_log
     else
-        bad "the deadman was not armed when the apply was killed"
+        # Kill the apply mid-flight, simulating a candidate that wedges the host.
+        # The bracket stops the pattern from matching pkill's own command line --
+        # unbracketed, pkill SIGKILLs the sudo that is running it.
+        sudo pkill -9 -f '[d]ns_tuner_apply apply' 2>/dev/null || true
+        wait $APPLY_PID 2>/dev/null || true
+
+        if ! systemctl is-active --quiet dns-tuner-deadman.timer 2>/dev/null; then
+            bad "the deadman disarmed itself before the kill landed -- the apply finished first"
+            dump_apply_log
+        else
+            ok "deadman is armed after the apply was killed"
+            info "waiting up to 210s for the unattended rollback..."
+            for _ in $(seq 1 42); do
+                sleep 5
+                systemctl is-active --quiet dns-tuner-deadman.timer 2>/dev/null || break
+            done
+            # The timer going inactive only means the rollback *started*; it
+            # still has to restart named and reload the zone. Poll instead of
+            # digging once, or a slow zone load reads as a failed recovery.
+            recovered=false
+            for _ in $(seq 1 30); do
+                if [ -n "$(dig +short +timeout=2 +tries=1 @127.0.0.1 ns1.workbench.lan A 2>/dev/null)" ]; then
+                    recovered=true; break
+                fi
+                sleep 2
+            done
+            if [ "$recovered" = true ]; then
+                ok "the host recovered on its own after the deadman fired"
+            else
+                bad "the host did NOT recover -- do not run unattended campaigns"
+                info "--- dns-tuner-deadman.service journal ---"
+                sudo journalctl -u dns-tuner-deadman.service -n 20 --no-pager 2>&1 | sed 's/^/         /'
+            fi
+        fi
     fi
 else
     hdr "Deadman rollback"

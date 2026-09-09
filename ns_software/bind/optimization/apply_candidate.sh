@@ -81,20 +81,52 @@ audit() {
 # to our own SSH session -- this fires and restores the previous generation with
 # nobody watching. Armed before the first mutation, disarmed only on success.
 
+unit_gone() {
+    # Works with and without `systemctl show --value` (pre-230 lacks it).
+    [ "$(systemctl show -p LoadState "$1" 2>/dev/null)" = "LoadState=not-found" ]
+}
+
+# `systemd-run --unit=X` refuses to start if X.service still exists, and systemd
+# garbage-collects transient units asynchronously -- so both units have to be
+# torn down and then *waited for*. Stopping only the timer leaves the transient
+# .service loaded, which is precisely what collides on the next arm within the
+# same session: the first apply of a run arms fine, the second dies with
+# "Unit dns-tuner-deadman.service already exists".
+clear_deadman_units() {
+    local u
+    for u in "$DEADMAN_UNIT.timer" "$DEADMAN_UNIT.service"; do
+        systemctl stop "$u"         >/dev/null 2>&1 || true
+        systemctl reset-failed "$u" >/dev/null 2>&1 || true
+    done
+    for _ in $(seq 1 25); do
+        if unit_gone "$DEADMAN_UNIT.timer" && unit_gone "$DEADMAN_UNIT.service"; then
+            return 0
+        fi
+        sleep 0.2
+    done
+    return 1
+}
+
 arm_deadman() {
-    systemctl stop "$DEADMAN_UNIT.timer"    >/dev/null 2>&1 || true
-    systemctl reset-failed "$DEADMAN_UNIT.service" >/dev/null 2>&1 || true
-    if systemd-run --quiet --on-active="$DEADMAN_SECONDS" --unit="$DEADMAN_UNIT" \
-            /usr/local/sbin/dns_tuner_apply rollback "$GEN" >/dev/null 2>&1; then
-        log "deadman armed: rollback to ${GEN##*/} in ${DEADMAN_SECONDS}s unless disarmed"
-    else
-        die 4 "could not arm the deadman timer; refusing to mutate the host"
-    fi
+    local attempt err=""
+    for attempt in 1 2 3; do
+        clear_deadman_units || log "deadman units still loaded after teardown (attempt $attempt)"
+        if err=$(systemd-run --quiet --on-active="$DEADMAN_SECONDS" --unit="$DEADMAN_UNIT" \
+                     /usr/local/sbin/dns_tuner_apply rollback "$GEN" 2>&1); then
+            log "deadman armed: rollback to ${GEN##*/} in ${DEADMAN_SECONDS}s unless disarmed"
+            return 0
+        fi
+        # Never swallow this: it is the difference between "systemd-run is
+        # broken" and "a stale unit is in the way", and the apply is about to
+        # abort on it.
+        log "arming the deadman failed (attempt $attempt): ${err:-no error text}"
+        sleep 1
+    done
+    die 4 "could not arm the deadman timer: ${err:-unknown error}; refusing to mutate the host"
 }
 
 disarm_deadman() {
-    systemctl stop "$DEADMAN_UNIT.timer"    >/dev/null 2>&1 || true
-    systemctl reset-failed "$DEADMAN_UNIT.service" >/dev/null 2>&1 || true
+    clear_deadman_units || log "deadman units lingered after disarm"
     log "deadman disarmed"
 }
 
