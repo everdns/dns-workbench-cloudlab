@@ -24,7 +24,8 @@ class Kxdpgun(Tool):
         result = ToolResult(raw_output=stdout)
 
         # "total queries:     400040 (100010 pps)"
-        m = re.search(r"total queries:\s+([\d]+)\s+\((\d+)\s+pps\)", stdout)
+        # "total queries:     499728 (49,962 pps) (99.988489 %)"
+        m = re.search(r"total queries:\s+([\d,]+)", stdout)
         if m:
             result.queries_sent = int(m.group(1))
 
