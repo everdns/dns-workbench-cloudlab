@@ -1,0 +1,10 @@
+search_config: configs/binary_testing.yaml
+dns_service: ns_bind
+
+parameters:
+  - name: udp-receive-buffer
+    values: [4194304, 16777216]
+  - name: udp-send-buffer
+    values: [4194304, 16777216]
+  - name: max-udp-size
+    values: [1232, 2048, 4096]
