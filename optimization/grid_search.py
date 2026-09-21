@@ -75,11 +75,6 @@ def point_id(overrides):
     parts = [f"{name}={value}" for name, value in overrides.items()]
     return re.sub(r"[^A-Za-z0-9=_.-]", "_", "__".join(parts))
 
-
-def resolve_path(path):
-    return path if os.path.isabs(path) else os.path.join(BENCHMARK_DIR, path)
-
-
 def restore_or_exit(server, base_text):
     """Put the base config back, or stop the search.
 
@@ -201,12 +196,13 @@ def main():
     grid = load_grid(args.grid)
     parameters = grid["parameters"]
     search_config = args.search_config or grid.get("search_config")
+    search_config = search_config if os.path.isabs(search_config) else os.path.join(BENCHMARK_DIR, search_config)
     dns_service = args.dns_service or grid.get("dns_service", "ns_bind")
     if not search_config:
         log.error("No search_config set in %s and none given on the CLI", args.grid)
         return 2
 
-    config = load_config(resolve_path(search_config))
+    config = load_config(search_config)
     server = args.server or config.get("hosts", {}).get("server")
     if not server:
         log.error("No name server host configured")
