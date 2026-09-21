@@ -198,6 +198,7 @@ def main():
     search_config = args.search_config or grid.get("search_config")
     search_config = search_config if os.path.isabs(search_config) else os.path.join(BENCHMARK_DIR, search_config)
     dns_service = args.dns_service or grid.get("dns_service", "ns_bind")
+    search_output_dir = args.output_dir if os.path.isabs(args.output_dir) else os.path.join(BENCHMARK_DIR, args.output_dir)
     if not search_config:
         log.error("No search_config set in %s and none given on the CLI", args.grid)
         return 2
@@ -225,11 +226,11 @@ def main():
                             dry_run=True)
         return 0
 
-    done = completed_points(args.output_dir) if args.resume else set()
+    done = completed_points(search_output_dir) if args.resume else set()
     if done:
         log.info("Resuming: %d point(s) already recorded", len(done))
 
-    store = ResultStore(args.output_dir)
+    store = ResultStore(search_output_dir)
     started = time.time()
     best = None
 
@@ -270,7 +271,7 @@ def main():
                 restore_or_exit(server, base_text)
                 continue
 
-            run_dir = os.path.join(args.output_dir, SCRIPT_NAME, "runs", pid)
+            run_dir = os.path.join(search_output_dir, SCRIPT_NAME, "runs", pid)
             row["run_dir"] = run_dir
             try:
                 exit_code, summary = run_evaluation(
