@@ -28,6 +28,7 @@ sudo apt-get install -y \
   libtool autoconf automake make pkg-config liburcu-dev libgnutls28-dev libedit-dev liblmdb-dev libbpf-dev libmnl-dev
 sudo git clone --branch 3.5 --depth 1 https://gitlab.nic.cz/knot/knot-dns.git /opt/knot-dns
 cd /opt/knot-dns && sudo autoreconf -if && sudo ./configure --enable-xdp=yes && sudo make -j$(nproc) && sudo make install
+echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/knot-dns.conf && sudo ldconfig
 #Install kxdpgun-dnsworkbench
 sudo apt-get install -y build-essential libbpf-dev libmnl-dev libelf-dev
 sudo git clone https://github.com/everdns/kxdpgun-dnsworkbench.git /opt/kxdpgun-dnsworkbench
