@@ -1,4 +1,4 @@
-search_config: load_testing_benchmark/configs/binary_testing.yaml
+search_config: configs/binary_testing.yaml
 dns_service: ns_bind
 
 parameters:

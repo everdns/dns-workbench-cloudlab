@@ -2,7 +2,6 @@ hosts:
   server: 10.10.1.2
   clients:
     - 10.10.1.3
-    - 10.10.1.4
 
 server_interface: enp1s0d1
 client_interface: enp1s0d1
