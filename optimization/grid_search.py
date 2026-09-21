@@ -198,7 +198,7 @@ def main():
     search_config = args.search_config or grid.get("search_config")
     search_config = search_config if os.path.isabs(search_config) else os.path.join(BENCHMARK_DIR, search_config)
     dns_service = args.dns_service or grid.get("dns_service", "ns_bind")
-    search_output_dir = args.output_dir if os.path.isabs(args.output_dir) else os.path.join(BENCHMARK_DIR, args.output_dir)
+    search_output_dir = args.output_dir if os.path.isabs(args.output_dir) else os.path.join(OPTIMIZATION_DIR, args.output_dir)
     if not search_config:
         log.error("No search_config set in %s and none given on the CLI", args.grid)
         return 2
