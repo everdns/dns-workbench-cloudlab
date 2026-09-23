@@ -58,7 +58,7 @@ def generate_zone_file(subnet_str, output_file=None):
             3600 )     ; minimum
 
     IN  NS  ns1.dns64perf.test.
-ns1     IN  A   10.10.1.2
+ns1     IN  A   10.10.1.1
 
 """
 

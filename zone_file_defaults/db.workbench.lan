@@ -7,5 +7,5 @@ $TTL 3600
             3600 )     ; minimum
 
     IN  NS  ns1.workbench.lan.
-ns1     IN  A 10.10.1.2
+ns1     IN  A 10.10.1.1
 010-000-000-001.workbench.lan.  IN  A  10.0.0.1
