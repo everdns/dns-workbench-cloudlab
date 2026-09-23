@@ -17,7 +17,7 @@ def make_header(sld):
             3600 )     ; minimum
 
     IN  NS  ns1.{sld}.
-ns1     IN  A 10.10.1.2
+ns1     IN  A 10.10.1.1
 """
 
 DEFAULT_RECORD_WEIGHTS = {
