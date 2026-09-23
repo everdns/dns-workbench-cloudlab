@@ -1,4 +1,5 @@
 #!/bin/sh
+sudo apt update -y
 #Install dnsperf
 sudo apt install -y autoconf automake libtool  libssl-dev libldns-dev libck-dev libnghttp2-dev
 sudo git clone https://codeberg.org/DNS-OARC/dnsperf.git /opt/dnsperf
