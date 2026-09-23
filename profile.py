@@ -1,4 +1,4 @@
-"""Simple Experiment with a user Host, Resolver, and Local Name Server"""
+"""Experiment testbed for agentic optimization"""
 # Import the Portal object.
 import geni.portal as portal
 # Import the ProtoGENI library.
