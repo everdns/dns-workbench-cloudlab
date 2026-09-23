@@ -1,7 +1,7 @@
 hosts:
-  server: 10.10.1.2
+  server: 10.10.1.1
   clients:
-    - 10.10.1.3
+    - 10.10.1.2
 
 client_interface: enp1s0d1
 input_file: /local/repository/dnsperf_input

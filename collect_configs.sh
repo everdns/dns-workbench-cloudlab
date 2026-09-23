@@ -41,8 +41,8 @@ collect_file() {
 found_any=false
 declare -A seen_paths
 
-# Discover every software's info.yaml across both trees.
-for info in "$REPO_DIR"/ns_software/*/info.yaml "$REPO_DIR"/resolver_software/*/info.yaml; do
+# Discover every software's info.yaml
+for info in "$REPO_DIR"/ns_software/*/info.yamlW; do
     [ -f "$info" ] || continue
 
     config_dir=$(read_info "$info" software_dir)
