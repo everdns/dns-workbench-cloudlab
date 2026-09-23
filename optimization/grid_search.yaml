@@ -3,7 +3,7 @@ hosts:
   clients:
     - 10.10.1.2
 
-client_interface: enp1s0d1
+client_interface: eno1d1
 input_file: /local/repository/dnsperf_input
 
 dns_service: ns_bind
@@ -15,20 +15,22 @@ tool: kxdpgun
 threads: 8
 ports_per_thread: 64
 timeout: 1
-pause_between_runs: 5
+pause_between_runs: 2
 
 max_sustainable_qps:
   initial_qps: 100000
   min_qps_step: 10000
   max_qps: 3000000
-  num_trials: 5
-  min_passes: 4
-  trial_duration: 10
+  num_trials: 3
+  min_passes: 2
+  trial_duration: 5
   answer_rate_threshold: 99.0
   min_qps_fidelity_pct: 99.0
   collectl: false
-  collectl_margin: 5
+  collectl_margin: 3
 
+# --mode coordinate-descent starts from each parameter's first value and sweeps
+# the parameters in this order, so list the likely bottleneck early.
 parameters:
   - name: udp-receive-buffer
     values: [4194304, 16777216]
@@ -36,3 +38,20 @@ parameters:
     values: [4194304, 16777216]
   - name: max-udp-size
     values: [1232, 2048, 4096]
+
+  # Host-level tuning on the name server (optimization/system_config.py).
+  # "default" leaves the host's own setting in place.
+  - name: udp-conntrack        # ufw enabled by profile.py
+    values: [default, ufw-off, notrack, conntrack-raised]
+  - name: rmem                 # net.core.rmem_max + rmem_default (stock 212992)
+    values: [default, 16777216, 67108864]
+  - name: netdev-max-backlog   # net.core.netdev_max_backlog (stock 1000)
+    values: [default, 5000, 30000]
+  - name: netdev-budget        # net.core.netdev_budget / _usecs
+    values: [default, "600/4000", "3000/16000"]
+  - name: udp-mem              # udp_rmem_min/udp_wmem_min -> 16 KB, udp_mem x4
+    values: [default, raised]
+  - name: optmem-max           # net.core.optmem_max (stock 20480)
+    values: [default, 65536]
+  - name: named-nofile         # LimitNOFILE for named.service
+    values: [default, 1048576]
