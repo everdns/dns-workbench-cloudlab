@@ -721,9 +721,10 @@ class Kxdpgun(Tool):
         interface = config["client_interface"]
 
         return (
-            f"sudo kxdpgun -t {runtime} -Q {qps} -b 1"
+            f"sudo kxdpgun -t {runtime} -Q {qps}"
             f" -i {input_file} -I {interface}"
-            f" {server} --mode copy"
+            f" {server} --mode generic"
+            f" && sudo ip link set dev eno1d1 xdpgeneric off"
         )
 
     def parse_output(self, stdout):
@@ -989,6 +990,8 @@ def run_trial(config, params, qps, trial, trial_store):
             collectl_session = None
 
     try:
+        for host, cmd in host_cmds.items():
+            log.info("Running on %s: %s", host, cmd)
         tool_timeout = trial_duration + 2 * collectl_margin + 120
         run_results = ssh_run_many(host_cmds, timeout=tool_timeout)
 
@@ -1003,6 +1006,7 @@ def run_trial(config, params, qps, trial, trial_store):
             trial_store.save_raw_output(
                 SCRIPT_NAME,
                 f"{dns_service}_{tool.name}_{qps}qps_trial{trial}_{host_token(host)}.txt",
+                f"=== COMMAND ===\n{host_cmds[host]}\n"
                 f"=== STDOUT ===\n{stdout}\n=== STDERR ===\n{stderr}",
             )
             try:
