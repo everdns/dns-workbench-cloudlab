@@ -12,9 +12,7 @@ grid_search.yaml is the only configuration file this needs: it holds both the
 grid parameters and the base search config (hosts, tool, dns service, etc.)
 passed to optimization.max_sustainable_qps.
 
-Run from the repository root:
-
-    python3 -m optimization.grid_search --output-dir results
+    python3 grid_search --output-dir results
 """
 import argparse
 import csv
@@ -29,14 +27,14 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import yaml
 
-from optimization.bind_config import (
+from bind_config import (
     BindConfigError,
     install_options,
     load_base_options,
     render_options,
     restore_base,
 )
-from optimization.max_sustainable_qps import ResultStore, run_max_sustainable_qps
+from max_sustainable_qps import ResultStore, run_max_sustainable_qps
 
 log = logging.getLogger("grid_search")
 
