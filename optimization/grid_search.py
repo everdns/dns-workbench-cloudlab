@@ -5,10 +5,12 @@ For each point in the grid:
 
   1. Propose a configuration (the next combination of parameter values).
   2. Attempt the configuration update on the name server.
-  3a. On success, run max_sustainable_qps.py and record the result.
+  3a. On success, run the max-sustainable-QPS search and record the result.
   3b. On failure, record why and return to step 1.
 
-Parameters and their ranges come from a grid config YAML; see grid_search.yaml.
+grid_search.yaml is the only configuration file this needs: it holds both the
+grid parameters and the base search config (hosts, tool, dns service, etc.)
+passed to optimization.max_sustainable_qps.
 
 Run from the repository root:
 
@@ -17,18 +19,16 @@ Run from the repository root:
 import argparse
 import csv
 import itertools
-import json
 import logging
 import os
 import re
-import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import yaml
 
-from load_testing_benchmark.benchmark.config import load_config
-from load_testing_benchmark.benchmark.results import ResultStore
 from optimization.bind_config import (
     BindConfigError,
     install_options,
@@ -36,24 +36,24 @@ from optimization.bind_config import (
     render_options,
     restore_base,
 )
+from optimization.max_sustainable_qps import ResultStore, run_max_sustainable_qps
 
 log = logging.getLogger("grid_search")
 
 SCRIPT_NAME = "grid_search"
 OPTIMIZATION_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(OPTIMIZATION_DIR)
-BENCHMARK_DIR = os.path.join(REPO_ROOT, "load_testing_benchmark")
-MAX_SUSTAINABLE_QPS = os.path.join(BENCHMARK_DIR, "scripts", "max_sustainable_qps.py")
 DEFAULT_GRID = os.path.join(OPTIMIZATION_DIR, "grid_search.yaml")
 
 EXIT_RESTORE_FAILED = 3
 
 
 def load_grid(path):
+    """Load grid_search.yaml. The same dict doubles as the grid parameters and
+    the base config passed to run_max_sustainable_qps for every point."""
     with open(path) as f:
-        grid = yaml.safe_load(f)
+        config = yaml.safe_load(f)
 
-    params = grid.get("parameters")
+    params = config.get("parameters")
     if not params:
         raise ValueError(f"{path}: no 'parameters' list configured")
     for p in params:
@@ -61,7 +61,7 @@ def load_grid(path):
             raise ValueError(f"{path}: a parameter entry is missing 'name'")
         if not p.get("values"):
             raise ValueError(f"{path}: parameter '{p['name']}' has no values")
-    return grid
+    return config
 
 
 def propose_configurations(parameters):
@@ -74,6 +74,7 @@ def propose_configurations(parameters):
 def point_id(overrides):
     parts = [f"{name}={value}" for name, value in overrides.items()]
     return re.sub(r"[^A-Za-z0-9=_.-]", "_", "__".join(parts))
+
 
 def restore_or_exit(server, base_text):
     """Put the base config back, or stop the search.
@@ -91,69 +92,40 @@ def restore_or_exit(server, base_text):
         raise SystemExit(EXIT_RESTORE_FAILED)
 
 
-def run_evaluation(search_config, dns_service, output_dir, timeout=None):
-    """Run max_sustainable_qps.py for the installed config.
+def run_evaluation(config, output_dir, timeout=None):
+    """Run the max-sustainable-QPS search in-process for the installed config.
 
-    Returns (exit_code, summary). max_sustainable_qps.py exits 0 on success,
-    1 when the DNS service failed to start, and 2 on a bad config. exit_code is
-    None if the run had to be killed for exceeding ``timeout``.
+    Returns (status, summary, trial_rows). status is "ok", "failed", or
+    "timeout". Runs in a worker thread so a hung point does not block forever;
+    on timeout the thread is abandoned rather than killed, and a fresh shallow
+    copy of ``config`` is passed to each call so an abandoned, still-running
+    thread from a prior timeout can't race the next point's mutation of shared
+    config keys (e.g. "runtime").
     """
-    cmd = [
-        sys.executable, MAX_SUSTAINABLE_QPS,
-        "--config", search_config,
-        "--dns-service", dns_service,
-        "--output-dir", output_dir,
-    ]
-
-    log.info("Running: %s", " ".join(cmd))
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(run_max_sustainable_qps, dict(config), output_dir)
     try:
-        proc = subprocess.run(cmd, cwd=BENCHMARK_DIR, timeout=timeout,
-                              capture_output=True, text=True)
-    except subprocess.TimeoutExpired:
+        summary, trial_rows = future.result(timeout=timeout)
+    except FutureTimeoutError:
         log.error("Evaluation timed out after %ss", timeout)
-        return None, None
-
-    os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, "max_sustainable_qps.log"), "w") as f:
-        f.write(proc.stdout or "")
-        f.write(proc.stderr or "")
-
-    if proc.returncode != 0:
-        log.error("max_sustainable_qps.py exited %d", proc.returncode)
-        return proc.returncode, None
-
-    return proc.returncode, read_summary(output_dir)
+        executor.shutdown(wait=False)
+        return "timeout", None, None
+    except (ValueError, RuntimeError, TimeoutError) as e:
+        log.error("max_sustainable_qps failed: %s", e)
+        executor.shutdown(wait=False)
+        return "failed", None, None
+    executor.shutdown(wait=False)
+    return "ok", summary, trial_rows
 
 
-def read_summary(output_dir):
-    """Read search_summary.json, which ResultStore writes as a list of one row."""
-    path = os.path.join(output_dir, "max_sustainable_qps", "search_summary.json")
-    if not os.path.exists(path):
-        log.error("No search summary at %s", path)
-        return None
-    with open(path) as f:
-        rows = json.load(f)
-    if not rows:
-        return None
-    return rows[0]
-
-
-def min_fidelity(output_dir):
+def min_fidelity(trial_rows):
     """Lowest qps_fidelity_pct across the run's trials, or None.
 
     A run whose fidelity dipped below the threshold was limited by the load
     generator, not by the server, so its max QPS is not a server measurement.
     """
-    path = os.path.join(output_dir, "max_sustainable_qps", "trial_results.csv")
-    if not os.path.exists(path):
-        return None
-    values = []
-    with open(path) as f:
-        for row in csv.DictReader(f):
-            try:
-                values.append(float(row["qps_fidelity_pct"]))
-            except (KeyError, TypeError, ValueError):
-                continue
+    values = [row["qps_fidelity_pct"] for row in (trial_rows or [])
+              if isinstance(row.get("qps_fidelity_pct"), (int, float))]
     return min(values) if values else None
 
 
@@ -171,17 +143,14 @@ def main():
         description="Grid search over BIND options scored by max sustainable QPS"
     )
     parser.add_argument("--grid", default=DEFAULT_GRID,
-                        help="Grid config YAML defining parameters and ranges")
-    parser.add_argument("--search-config",
-                        help="Config passed to max_sustainable_qps.py "
-                             "(overrides the grid config's search_config)")
+                        help="Grid config YAML defining parameters and the search config")
     parser.add_argument("--dns-service",
                         help="DNS service to evaluate (overrides the grid config)")
-    parser.add_argument("--server", help="Name server host (overrides the search config)")
+    parser.add_argument("--server", help="Name server host (overrides the grid config)")
     parser.add_argument("--output-dir", default="results",
                         help="Output directory for results")
     parser.add_argument("--point-timeout", type=int, default=21600,
-                        help="Seconds to allow one evaluation before killing it")
+                        help="Seconds to allow one evaluation before moving on")
     parser.add_argument("--resume", action="store_true",
                         help="Skip points already present in grid_results.csv")
     parser.add_argument("--dry-run", action="store_true",
@@ -193,18 +162,17 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    grid = load_grid(args.grid)
-    parameters = grid["parameters"]
-    search_config = args.search_config or grid.get("search_config")
-    search_config = search_config if os.path.isabs(search_config) else os.path.join(BENCHMARK_DIR, search_config)
-    dns_service = args.dns_service or grid.get("dns_service", "ns_bind")
-    search_output_dir = args.output_dir if os.path.isabs(args.output_dir) else os.path.join(OPTIMIZATION_DIR, args.output_dir)
-    if not search_config:
-        log.error("No search_config set in %s and none given on the CLI", args.grid)
-        return 2
+    config = load_grid(args.grid)
+    parameters = config["parameters"]
+    if args.dns_service:
+        config["dns_service"] = args.dns_service
+    if args.server:
+        config.setdefault("hosts", {})["server"] = args.server
 
-    config = load_config(search_config)
-    server = args.server or config.get("hosts", {}).get("server")
+    dns_service = config.get("dns_service", "ns_bind")
+    search_output_dir = args.output_dir if os.path.isabs(args.output_dir) else os.path.join(OPTIMIZATION_DIR, args.output_dir)
+
+    server = config.get("hosts", {}).get("server")
     if not server:
         log.error("No name server host configured")
         return 2
@@ -216,8 +184,7 @@ def main():
              len(parameters), len(points))
     for p in parameters:
         log.info("  %s: %s", p["name"], p["values"])
-    log.info("Name server: %s, service: %s, search config: %s",
-             server, dns_service, search_config)
+    log.info("Name server: %s, service: %s", server, dns_service)
 
     if args.dry_run:
         for overrides in points:
@@ -255,7 +222,6 @@ def main():
                 "total_trials_run": "",
                 "search_duration_s": "",
                 "min_qps_fidelity_pct": "",
-                "eval_exit_code": "",
                 "run_dir": "",
             }
 
@@ -274,26 +240,20 @@ def main():
             run_dir = os.path.join(search_output_dir, SCRIPT_NAME, "runs", pid)
             row["run_dir"] = run_dir
             try:
-                exit_code, summary = run_evaluation(
-                    search_config, dns_service, run_dir,
-                    timeout=args.point_timeout,
+                status, summary, trial_rows = run_evaluation(
+                    config, run_dir, timeout=args.point_timeout,
                 )
             finally:
                 restore_or_exit(server, base_text)
 
-            row["eval_exit_code"] = "" if exit_code is None else exit_code
-            if exit_code is None:
-                row["status"] = "timeout"
-            elif summary is None:
-                row["status"] = "eval_failed"
-            else:
-                row["status"] = "ok"
+            row["status"] = status
+            if status == "ok":
                 row["max_qps_passed"] = summary["max_qps_passed"]
                 row["max_qps_tested"] = summary["max_qps_tested"]
                 row["hit_max_qps_ceiling"] = summary["hit_max_qps_ceiling"]
                 row["total_trials_run"] = summary["total_trials_run"]
                 row["search_duration_s"] = summary["search_duration_s"]
-                fidelity = min_fidelity(run_dir)
+                fidelity = min_fidelity(trial_rows)
                 row["min_qps_fidelity_pct"] = "" if fidelity is None else fidelity
 
                 log.info("[%d/%d] %s -> %d QPS", index, len(points), pid,
@@ -305,7 +265,6 @@ def main():
             store.export_csv(SCRIPT_NAME, "grid_results.csv")
             store.export_json(SCRIPT_NAME, "grid_results.json")
     finally:
-        # Export before restoring so results survive a restore failure.
         path = store.export_csv(SCRIPT_NAME, "grid_results.csv")
         store.export_json(SCRIPT_NAME, "grid_results.json")
         if path:

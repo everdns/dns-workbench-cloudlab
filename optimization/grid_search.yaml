@@ -1,5 +1,33 @@
-search_config: configs/binary_testing.yaml
+hosts:
+  server: 10.10.1.2
+  clients:
+    - 10.10.1.3
+
+client_interface: enp1s0d1
+input_file: /local/repository/dnsperf_input
+
 dns_service: ns_bind
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+
+tool: kxdpgun
+threads: 8
+ports_per_thread: 64
+timeout: 1
+pause_between_runs: 5
+
+max_sustainable_qps:
+  initial_qps: 100000
+  min_qps_step: 10000
+  max_qps: 3000000
+  num_trials: 5
+  min_passes: 4
+  trial_duration: 10
+  answer_rate_threshold: 99.0
+  min_qps_fidelity_pct: 99.0
+  collectl: false
+  collectl_margin: 5
 
 parameters:
   - name: udp-receive-buffer

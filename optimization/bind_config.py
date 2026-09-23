@@ -4,7 +4,7 @@ import re
 import subprocess
 import tempfile
 
-from load_testing_benchmark.benchmark.remote import scp_to, ssh_run
+from optimization.max_sustainable_qps import scp_to, ssh_run
 
 log = logging.getLogger(__name__)
 
