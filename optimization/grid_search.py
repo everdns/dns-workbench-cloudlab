@@ -22,6 +22,7 @@ passed to optimization.max_sustainable_qps.
 """
 import argparse
 import csv
+import hashlib
 import itertools
 import logging
 import os
@@ -52,6 +53,9 @@ DEFAULT_GRID = os.path.join(OPTIMIZATION_DIR, "grid_search.yaml")
 
 EXIT_RESTORE_FAILED = 3
 
+# Keep run directory names well under the 255-byte filename limit.
+MAX_RUN_DIR_NAME = 100
+
 
 def load_grid(path):
     """Load grid_search.yaml. The same dict doubles as the grid parameters and
@@ -80,6 +84,14 @@ def propose_configurations(parameters):
 def point_id(overrides):
     parts = [f"{name}={value}" for name, value in overrides.items()]
     return re.sub(r"[^A-Za-z0-9=_.-]", "_", "__".join(parts))
+
+
+def run_dir_name(pid):
+    """Shorten ``pid`` for use as a directory name, keeping it unique via a hash."""
+    if len(pid) <= MAX_RUN_DIR_NAME:
+        return pid
+    digest = hashlib.sha1(pid.encode()).hexdigest()[:12]
+    return f"{pid[:MAX_RUN_DIR_NAME - 13]}_{digest}"
 
 
 def split_overrides(overrides):
@@ -236,7 +248,7 @@ class Evaluator:
             restore_or_exit(self.server, self.base_text, self.system_baseline)
             return row
 
-        run_dir = os.path.join(self.output_dir, SCRIPT_NAME, "runs", pid)
+        run_dir = os.path.join(self.output_dir, SCRIPT_NAME, "runs", run_dir_name(pid))
         row["run_dir"] = run_dir
         try:
             status, summary, trial_rows = run_evaluation(
