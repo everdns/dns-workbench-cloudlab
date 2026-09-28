@@ -55,7 +55,16 @@ Useful options:
 
 Each round, Claude gets the search space and every result so far, and proposes the configuration it expects to do best. The script checks that proposal against the bounds in `agent_search.yaml` before applying it, and sends invalid or repeated proposals back to Claude to fix.
 
-Setup:
+Claude can be reached in two ways. Pick one with `--agent-backend`, or set `agent.backend` in the YAML.
+
+**`claude-code`: uses your Claude Pro/Max subscription.** The script runs the Claude Code CLI (`claude -p`), so each proposal counts against your plan's usage limits, not API credits. Install Claude Code and log in once:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+claude        # sign in with your Claude account, then exit
+```
+
+**`api` (default): uses the Anthropic API, billed from Console credits.** A Pro subscription does not include API credits.
 
 ```bash
 pip install anthropic
@@ -69,10 +78,10 @@ Run:
 cd optimization
 
 # Ask for one proposal and print it, without applying anything
-python3 agent_search.py --dry-run
+python3 agent_search.py --agent-backend claude-code --dry-run
 
 # Test at most 15 configurations
-python3 agent_search.py --max-configs 15
+python3 agent_search.py --agent-backend claude-code --max-configs 15
 ```
 
 Useful options:
@@ -80,7 +89,9 @@ Useful options:
 | Option | Meaning |
 |---|---|
 | `--max-configs N` | Most configurations to test (default: `agent.max_configs` in the YAML, else 20). The first point, failed points and resumed points all count toward this limit |
-| `--agent-model`, `--agent-effort` | Claude model and effort (default `claude-opus-5`, `high`) |
+| `--agent-backend api\|claude-code` | How to reach Claude (default `api`) |
+| `--agent-model`, `--agent-effort` | Claude model and effort. The model defaults to `claude-opus-5` for `api` and to Claude Code's own default for `claude-code`; effort defaults to `high` |
+| `--claude-bin PATH` | Location of the `claude` executable, if it is not on your `PATH` |
 | `--agent-seed first\|none` | `first` (the default) measures every parameter at its first listed value before asking Claude. `none` lets Claude choose the first point too |
 | `--resume` | Keep the points from an earlier agent run and continue up to `--max-configs` |
 | `--point-timeout`, `--server`, `--dns-service`, `--output-dir` | Same as `grid_search.py` |

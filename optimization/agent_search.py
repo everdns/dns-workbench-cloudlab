@@ -20,11 +20,15 @@ agent_search.yaml holds the base search config (hosts, tool, dns service,
 max_sustainable_qps), the ``agent`` settings, and the parameters with the
 bounds the agent may choose within (see agent_proposer.py).
 
-Requires the Anthropic SDK and credentials:
+Claude is reached one of two ways (--agent-backend, or agent.backend):
 
-    pip install anthropic
-    export ANTHROPIC_API_KEY=...
-    export ANTHROPIC_WORKSPACE_ID=...   # only for keys not scoped to a workspace
+  api          The Anthropic API, billed as API usage (Console credits):
+                   pip install anthropic
+                   export ANTHROPIC_API_KEY=...
+                   export ANTHROPIC_WORKSPACE_ID=...   # only for keys not scoped to a workspace
+  claude-code  The Claude Code CLI (claude -p), which uses a Claude Pro/Max
+               subscription's usage limits. Install Claude Code and log in
+               once by running `claude`.
 
     python3 agent_search.py --max-configs 15
     python3 agent_search.py --dry-run          # show one proposal, measure nothing
@@ -37,10 +41,12 @@ import time
 
 import system_config
 from agent_proposer import (
+    BACKENDS,
     DEFAULT_MODEL,
     AgentProposalError,
     AgentProposer,
     build_search_space,
+    make_backend,
 )
 from bind_config import install_options, load_base_options, render_options
 from search import (
@@ -137,8 +143,15 @@ def main():
                         help="Most configurations to test, seed and failed "
                              "points included (default: agent.max_configs in "
                              f"the config, else {DEFAULT_MAX_CONFIGS})")
+    parser.add_argument("--agent-backend", choices=sorted(BACKENDS),
+                        help="How to reach Claude: api (Anthropic API credits) "
+                             "or claude-code (claude -p, subscription limits). "
+                             "Default: agent.backend, else api")
+    parser.add_argument("--claude-bin", default="claude",
+                        help="claude-code backend: path to the claude executable")
     parser.add_argument("--agent-model",
-                        help=f"Claude model (default: agent.model, else {DEFAULT_MODEL})")
+                        help=f"Claude model (default: agent.model, else {DEFAULT_MODEL} "
+                             "for api and Claude Code's own default for claude-code)")
     parser.add_argument("--agent-effort", choices=EFFORTS,
                         help="Claude effort level (default: agent.effort, else high)")
     parser.add_argument("--agent-seed", choices=["first", "none"], default="first",
@@ -175,7 +188,10 @@ def main():
         parser.error("--max-configs must be >= 1")
     if args.agent_retries < 1:
         parser.error("--agent-retries must be >= 1")
-    model = args.agent_model or agent_settings.get("model", DEFAULT_MODEL)
+    backend_name = args.agent_backend or agent_settings.get("backend", "api")
+    if backend_name not in BACKENDS:
+        parser.error(f"agent.backend must be one of {sorted(BACKENDS)}")
+    model = args.agent_model or agent_settings.get("model")
     effort = args.agent_effort or agent_settings.get("effort", "high")
 
     parameters = config["parameters"]
@@ -199,7 +215,8 @@ def main():
         return 2
 
     log.info("=== Agent search over %d parameter(s), at most %d configuration(s), "
-             "model %s (effort %s) ===", len(parameters), max_configs, model, effort)
+             "%s backend, model %s (effort %s) ===", len(parameters), max_configs,
+             backend_name, model or "default", effort)
     for spec in space:
         bounds = (spec["choices"] if spec["type"] == "enum"
                   else f"{spec['type']} [{spec['min']}, {spec['max']}]"
@@ -207,11 +224,16 @@ def main():
         log.info("  %s: %s", spec["name"], bounds)
     log.info("Name server: %s, service: %s", server, dns_service)
 
+    try:
+        backend = make_backend(backend_name, space, model=model, effort=effort,
+                               claude_bin=args.claude_bin)
+    except AgentProposalError as e:
+        log.error("%s", e)
+        return 2
     proposer = AgentProposer(
         space,
         context={key: config[key] for key in CONTEXT_KEYS if key in config},
-        model=model,
-        effort=effort,
+        backend=backend,
         max_retries=args.agent_retries,
         transcript_path=os.path.join(search_output_dir, SCRIPT_NAME,
                                      "agent_transcript.jsonl"),

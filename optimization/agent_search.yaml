@@ -31,7 +31,8 @@ max_sustainable_qps:
 
 agent:
   max_configs: 20          # most configurations to test (--max-configs overrides)
-  model: claude-opus-5
+  backend: api             # api (Anthropic API credits) | claude-code (claude -p, subscription limits)
+  # model: claude-opus-5   # default: claude-opus-5 for api, Claude Code's default for claude-code
   effort: high             # low | medium | high | xhigh | max
 
 # The agent may propose any value within each parameter's agent bounds.

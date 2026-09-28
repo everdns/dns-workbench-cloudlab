@@ -2,7 +2,9 @@
 
 Each call to AgentProposer.propose() sends the search space and every result
 recorded so far to Claude and gets back the next configuration to measure, as
-JSON constrained by a schema built from the search space. Proposals are
+JSON constrained by a schema built from the search space. Claude is reached
+through the Anthropic API (ApiBackend, billed as API usage) or the Claude Code
+CLI (ClaudeCodeBackend, which uses a Claude subscription's limits). Proposals are
 checked against the parameter bounds and dry-rendered through the same
 renderers bind_config.py and system_config.py use, so a bad value is sent back
 to the agent to fix instead of reaching the name server.
@@ -25,6 +27,9 @@ default when there is no ``agent:`` block; choices are ``values`` unless
 import json
 import logging
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 
 import bind_config
@@ -272,19 +277,22 @@ def build_prompt(space, rows, best, remaining, context):
 
 
 # ---------------------------------------------------------------------------
-# Proposer
+# Backends
+#
+# A backend turns a conversation (a list of {"role", "content"} text turns,
+# starting and ending with the user) into the agent's JSON answer text. It
+# raises AgentProposalError when no answer can be had.
 # ---------------------------------------------------------------------------
 
-class AgentProposer:
-    def __init__(self, space, context, model=DEFAULT_MODEL, effort="high",
-                 max_retries=3, transcript_path=None, client=None):
-        self.space = space
-        self.context = context
-        self.model = model
+class ApiBackend:
+    """Calls the Anthropic Messages API (billed as API usage)."""
+
+    name = "api"
+
+    def __init__(self, schema, model=DEFAULT_MODEL, effort="high", client=None):
+        self.schema = schema
+        self.model = model or DEFAULT_MODEL
         self.effort = effort
-        self.max_retries = max_retries
-        self.transcript_path = transcript_path
-        self.schema = response_schema(space)
         if client is None:
             import anthropic
             # An API key that is not scoped to a workspace needs the workspace
@@ -294,14 +302,7 @@ class AgentProposer:
             client = anthropic.Anthropic(default_headers=headers)
         self.client = client
 
-    def _record(self, entry):
-        if not self.transcript_path:
-            return
-        os.makedirs(os.path.dirname(self.transcript_path), exist_ok=True)
-        with open(self.transcript_path, "a") as f:
-            f.write(json.dumps({"time": time.time(), **entry}, default=str) + "\n")
-
-    def _call(self, messages):
+    def _stream(self, messages):
         import anthropic
         try:
             with self.client.beta.messages.stream(
@@ -329,6 +330,125 @@ class AgentProposer:
         except anthropic.APIConnectionError as e:
             raise AgentProposalError(f"Could not reach the Anthropic API: {e}") from e
 
+    def complete(self, messages):
+        response = self._stream(messages)
+        text = next((b.text for b in response.content if b.type == "text"), "")
+        usage = getattr(response, "usage", None)
+        meta = {"stop_reason": response.stop_reason,
+                "usage": usage.to_dict() if hasattr(usage, "to_dict") else None}
+        if response.stop_reason == "refusal":
+            raise AgentProposalError(f"agent refused: {response.stop_details}")
+        if response.stop_reason == "max_tokens":
+            raise AgentProposalError("agent response was cut off at max_tokens")
+        return text, meta
+
+
+class ClaudeCodeBackend:
+    """Runs the Claude Code CLI (``claude -p``), so a Claude subscription's
+    usage limits apply instead of API billing. Claude Code must be installed
+    and logged in (run ``claude`` once and sign in).
+
+    Each call is a fresh, unsaved session in an empty temporary directory, so
+    the agent has nothing on this machine to read or change.
+    """
+
+    name = "claude-code"
+
+    def __init__(self, schema, model=None, effort="high", claude_bin="claude",
+                 timeout=1800):
+        self.schema = schema
+        self.model = model
+        self.effort = effort
+        self.claude_bin = claude_bin
+        self.timeout = timeout
+        if shutil.which(claude_bin) is None:
+            raise AgentProposalError(
+                f"'{claude_bin}' not found. Install Claude Code and log in, or "
+                "pass --claude-bin with its path.")
+
+    @staticmethod
+    def _render(messages):
+        """Flatten a retry conversation into one prompt; the CLI takes one."""
+        if len(messages) == 1:
+            return messages[0]["content"]
+        parts = [messages[0]["content"]]
+        for turn in messages[1:]:
+            tag = ("your_previous_answer" if turn["role"] == "assistant"
+                   else "feedback")
+            parts.append(f"<{tag}>\n{turn['content']}\n</{tag}>")
+        return "\n\n".join(parts)
+
+    def complete(self, messages):
+        command = [
+            self.claude_bin, "-p",
+            "--output-format", "json",
+            "--json-schema", json.dumps(self.schema),
+            "--append-system-prompt", SYSTEM_PROMPT,
+            "--no-session-persistence",
+            "--max-turns", "5",
+        ]
+        if self.model:
+            command += ["--model", self.model]
+        if self.effort:
+            command += ["--effort", self.effort]
+
+        with tempfile.TemporaryDirectory(prefix="agent_search_") as workdir:
+            try:
+                proc = subprocess.run(
+                    command, input=self._render(messages), cwd=workdir,
+                    capture_output=True, text=True, timeout=self.timeout,
+                )
+            except subprocess.TimeoutExpired as e:
+                raise AgentProposalError(
+                    f"claude -p did not finish within {self.timeout}s") from e
+
+        try:
+            result = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            raise AgentProposalError(
+                f"claude -p failed (rc={proc.returncode}): "
+                f"{_clip((proc.stderr or proc.stdout).strip())}")
+
+        meta = {"subtype": result.get("subtype"),
+                "total_cost_usd": result.get("total_cost_usd"),
+                "usage": result.get("usage")}
+        if result.get("is_error") or result.get("subtype") != "success":
+            raise AgentProposalError(
+                f"claude -p ended with {result.get('subtype')}: "
+                f"{_clip(result.get('result') or result.get('errors') or '')}")
+        structured = result.get("structured_output")
+        if structured is not None:
+            return json.dumps(structured), meta
+        # No structured output: fall back to the final text, which the
+        # proposer parses and rejects if it is not the expected JSON.
+        return result.get("result") or "", meta
+
+
+BACKENDS = {ApiBackend.name: ApiBackend, ClaudeCodeBackend.name: ClaudeCodeBackend}
+
+
+# ---------------------------------------------------------------------------
+# Proposer
+# ---------------------------------------------------------------------------
+
+class AgentProposer:
+    def __init__(self, space, context, backend, max_retries=3,
+                 transcript_path=None):
+        """``backend`` is an ApiBackend or ClaudeCodeBackend built with
+        ``response_schema(space)``; see make_backend()."""
+        self.space = space
+        self.context = context
+        self.backend = backend
+        self.max_retries = max_retries
+        self.transcript_path = transcript_path
+
+    def _record(self, entry):
+        if not self.transcript_path:
+            return
+        os.makedirs(os.path.dirname(self.transcript_path), exist_ok=True)
+        with open(self.transcript_path, "a") as f:
+            f.write(json.dumps({"time": time.time(), **entry}, default=str) + "\n")
+
     def propose(self, rows, best, remaining):
         """Return (configuration, reasoning, stop) for the next point.
 
@@ -338,20 +458,13 @@ class AgentProposer:
         measured = {row["point_id"] for row in rows if row.get("point_id")}
         prompt = build_prompt(self.space, rows, best, remaining, self.context)
         messages = [{"role": "user", "content": prompt}]
-        self._record({"event": "prompt", "prompt": prompt})
+        self._record({"event": "prompt", "backend": self.backend.name,
+                      "prompt": prompt})
 
         for attempt in range(1, self.max_retries + 1):
-            response = self._call(messages)
-            usage = getattr(response, "usage", None)
-            text = next((b.text for b in response.content if b.type == "text"), "")
+            text, meta = self.backend.complete(messages)
             self._record({"event": "response", "attempt": attempt,
-                          "stop_reason": response.stop_reason, "text": text,
-                          "usage": usage.to_dict() if hasattr(usage, "to_dict") else None})
-
-            if response.stop_reason == "refusal":
-                raise AgentProposalError(f"agent refused: {response.stop_details}")
-            if response.stop_reason == "max_tokens":
-                raise AgentProposalError("agent response was cut off at max_tokens")
+                          "text": text, **meta})
 
             try:
                 answer = json.loads(text)
@@ -373,10 +486,20 @@ class AgentProposer:
             log.warning("Agent proposal rejected (attempt %d/%d): %s",
                         attempt, self.max_retries, "; ".join(errors))
             self._record({"event": "rejected", "attempt": attempt, "errors": errors})
-            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "assistant", "content": text or "(empty)"})
             messages.append({"role": "user", "content":
                              "That proposal cannot be used:\n- " + "\n- ".join(errors)
                              + "\nPropose a corrected configuration."})
 
         raise AgentProposalError(
             f"no usable proposal after {self.max_retries} attempts")
+
+
+def make_backend(name, space, model=None, effort="high", claude_bin="claude"):
+    schema = response_schema(space)
+    if name == ApiBackend.name:
+        return ApiBackend(schema, model=model, effort=effort)
+    if name == ClaudeCodeBackend.name:
+        return ClaudeCodeBackend(schema, model=model, effort=effort,
+                                 claude_bin=claude_bin)
+    raise ValueError(f"unknown agent backend {name!r}; choose from {sorted(BACKENDS)}")
