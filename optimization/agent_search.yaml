@@ -1,0 +1,83 @@
+hosts:
+  server: 10.10.1.1
+  clients:
+    - 10.10.1.2
+
+client_interface: eno1d1
+input_file: /local/repository/dnsperf_input
+
+dns_service: ns_bind
+dns_services:
+  start_script: /local/repository/start_dns_service.sh
+  stop_script: /local/repository/stop_dns_service.sh
+
+tool: kxdpgun
+threads: 8
+ports_per_thread: 64
+timeout: 1
+pause_between_runs: 2
+
+max_sustainable_qps:
+  initial_qps: 100000
+  min_qps_step: 10000
+  max_qps: 3000000
+  num_trials: 3
+  min_passes: 2
+  trial_duration: 5
+  answer_rate_threshold: 99.0
+  min_qps_fidelity_pct: 99.0
+  collectl: false
+  collectl_margin: 3
+
+agent:
+  max_configs: 20          # most configurations to test (--max-configs overrides)
+  model: claude-opus-5
+  effort: high             # low | medium | high | xhigh | max
+
+# The agent may propose any value within each parameter's agent bounds.
+# "values" are shown to it as suggestions; the first value of every parameter
+# is the seed point (--agent-seed first).
+parameters:
+  - name: udp-receive-buffer
+    values: [4194304, 16777216]
+    agent: {type: int, min: 1048576, max: 67108864,
+            description: "BIND udp-receive-buffer (bytes); capped by net.core.rmem_max"}
+  - name: udp-send-buffer
+    values: [4194304, 16777216]
+    agent: {type: int, min: 1048576, max: 67108864,
+            description: "BIND udp-send-buffer (bytes); capped by net.core.wmem_max"}
+  - name: max-udp-size
+    values: [1232, 2048, 4096]
+    agent: {type: int, min: 512, max: 4096,
+            description: "BIND max-udp-size (bytes)"}
+
+  # Host-level tuning on the name server (optimization/system_config.py).
+  # "default" leaves the host's own setting in place.
+  - name: udp-conntrack
+    values: [default, ufw-off, notrack, conntrack-raised]
+    agent: {type: enum,
+            description: "ufw is enabled by profile.py. ufw-off disables it; notrack adds raw-table NOTRACK rules for udp/53; conntrack-raised raises nf_conntrack_max and hashsize"}
+  - name: rmem
+    values: [default, 16777216, 67108864]
+    agent: {type: int, min: 212992, max: 268435456,
+            description: "net.core.rmem_max and rmem_default (stock 212992)"}
+  - name: netdev-max-backlog
+    values: [default, 5000, 30000]
+    agent: {type: int, min: 1000, max: 1000000,
+            description: "net.core.netdev_max_backlog (stock 1000)"}
+  - name: netdev-budget
+    values: [default, "600/4000", "3000/16000"]
+    agent: {type: pair, min: [300, 2000], max: [100000, 1000000],
+            description: "net.core.netdev_budget / netdev_budget_usecs (stock 300/2000)"}
+  - name: udp-mem
+    values: [default, raised]
+    agent: {type: enum,
+            description: "raised: udp_rmem_min/udp_wmem_min -> 16 KB and udp_mem x4"}
+  - name: optmem-max
+    values: [default, 65536]
+    agent: {type: int, min: 20480, max: 16777216,
+            description: "net.core.optmem_max (stock 20480)"}
+  - name: named-nofile
+    values: [default, 1048576]
+    agent: {type: int, min: 1024, max: 4194304,
+            description: "LimitNOFILE for named.service"}
