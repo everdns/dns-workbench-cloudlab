@@ -24,6 +24,7 @@ Requires the Anthropic SDK and credentials:
 
     pip install anthropic
     export ANTHROPIC_API_KEY=...
+    export ANTHROPIC_WORKSPACE_ID=...   # only for keys not scoped to a workspace
 
     python3 agent_search.py --max-configs 15
     python3 agent_search.py --dry-run          # show one proposal, measure nothing

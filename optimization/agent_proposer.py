@@ -287,7 +287,11 @@ class AgentProposer:
         self.schema = response_schema(space)
         if client is None:
             import anthropic
-            client = anthropic.Anthropic()
+            # An API key that is not scoped to a workspace needs the workspace
+            # named on every request.
+            workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+            headers = {"anthropic-workspace-id": workspace} if workspace else None
+            client = anthropic.Anthropic(default_headers=headers)
         self.client = client
 
     def _record(self, entry):
