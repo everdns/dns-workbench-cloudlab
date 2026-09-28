@@ -30,7 +30,7 @@ import time
 import bind_config
 import system_config
 from bind_config import BindConfigError
-from grid_search import point_id
+from search import point_id
 from system_config import SystemConfigError
 
 log = logging.getLogger("agent_proposer")

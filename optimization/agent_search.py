@@ -9,7 +9,7 @@ Instead of walking a fixed grid, each next configuration is chosen by Claude:
      Proposals outside the bounds, that fail to render, or that were already
      measured are sent back to it to correct.
   3. Install, measure and restore the point exactly as grid_search.py does
-     (same Evaluator), record the row with the agent's reasoning, and repeat
+     (search.Evaluator), record the row with the agent's reasoning, and repeat
      until --max-configs configurations have been tested.
 
 The run starts from one seed point (every parameter at its first value) unless
@@ -42,7 +42,7 @@ from agent_proposer import (
     build_search_space,
 )
 from bind_config import install_options, load_base_options, render_options
-from grid_search import (
+from search import (
     OPTIMIZATION_DIR,
     SCRIPT_NAME,
     Evaluator,
