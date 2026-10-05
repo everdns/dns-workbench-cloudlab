@@ -30,14 +30,19 @@ max_sustainable_qps:
   collectl_margin: 3
 
 agent:
-  max_configs: 20          # most configurations to test (--max-configs overrides)
+  max_configs: 20          # most measurements, repeats included (--max-configs overrides)
   backend: api             # api (Anthropic API credits) | claude-code (claude -p, subscription limits)
   # model: claude-opus-5   # default: claude-opus-5 for api, Claude Code's default for claude-code
   effort: high             # low | medium | high | xhigh | max
+  # max_turns: 180         # default: 8 per measurement + 20
+  # claude-code backend: stop measuring (the agent writes its report) once the
+  # subscription's usage reaches these percentages. Leave out for no limit.
+  max_session_usage: 50    # 5-hour session window (--max-session-usage)
+  max_weekly_usage: 50     # weekly window (--max-weekly-usage)
 
-# The agent may propose any value within each parameter's agent bounds.
+# The agent may measure any value within each parameter's agent bounds.
 # "values" are shown to it as suggestions; the first value of every parameter
-# is the seed point (--agent-seed first).
+# makes up the starting (baseline) configuration.
 parameters:
   - name: udp-receive-buffer
     values: [4194304, 16777216]

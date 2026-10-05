@@ -10,7 +10,7 @@ These scripts look for the BIND options and name-server host settings that give 
 | Script | How it picks the next configuration | Config file |
 |---|---|---|
 | `grid_search.py` | Every combination (`grid`), or one parameter at a time (`coordinate-descent`) | `grid_search.yaml` |
-| `agent_search.py` | Claude reads the results so far and proposes the next configuration | `agent_search.yaml` |
+| `agent_search.py` | A Claude agent runs the whole search: what to measure, what to repeat, what to inspect on the server, and when to stop | `agent_search.yaml` |
 
 Both scripts use the shared code in `search.py`.
 
@@ -53,11 +53,21 @@ Useful options:
 
 ## agent_search.py
 
-Each round, Claude gets the search space and every result so far, and proposes the configuration it expects to do best. The script checks that proposal against the bounds in `agent_search.yaml` before applying it, and sends invalid or repeated proposals back to Claude to fix.
+A Claude agent runs the search from start to finish. The script connects it to the name server through a few tools, and the agent decides how to use them:
+
+| Tool | What it does |
+|---|---|
+| `measure_configuration` | Installs a configuration, measures it, restores the base, and returns the score and per-level answer rates. Uses one measurement from the budget. With `repeat=true` it re-measures a configuration that was already tested, to check noise |
+| `get_results` | Lists every measurement so far, with the budget left and the best result |
+| `get_run_details` | Shows per-level and per-trial results for one measurement |
+| `inspect_server` | Runs a fixed read-only diagnostic on the name server: `udp_counters`, `softnet_stat`, `sysctls`, `firewall`, `nic`, `cpu`, `named`, or `memory`. The agent cannot run any other command |
+| `finish` | Ends the search with a recommended configuration and a written report |
+
+The agent chooses the order of measurements, including whether to start from the baseline (every parameter at its first listed value). It decides when a result needs a repeat, when to look at drop counters, and when to stop. The script sets the limits: every value must be inside the `agent:` bounds in `agent_search.yaml`, and the run stops at `--max-configs` measurements. A rejected call goes back to the agent as an error and never reaches the server.
 
 Claude can be reached in two ways. Pick one with `--agent-backend`, or set `agent.backend` in the YAML.
 
-**`claude-code`: uses your Claude Pro/Max subscription.** The script runs the Claude Code CLI (`claude -p`), so each proposal counts against your plan's usage limits, not API credits. Install Claude Code and log in once:
+**`claude-code`: uses your Claude Pro/Max subscription.** The whole search is one Claude Code session (`claude -p`), which counts against your plan's usage limits, not API credits. Claude Code reaches the tools through an MCP server, `agent_mcp_proxy.py`, which it starts itself. You don't need to install anything besides Claude Code. That session gets only the search tools; Claude Code's own Bash, Edit, Write and web tools are turned off. Install Claude Code and log in once:
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -77,26 +87,28 @@ Run:
 ```bash
 cd optimization
 
-# Ask for one proposal and print it, without applying anything
+# Let the agent pick its first configuration and show what would be applied, without changing the server
 python3 agent_search.py --agent-backend claude-code --dry-run
 
-# Test at most 15 configurations
+# Allow at most 15 measurements
 python3 agent_search.py --agent-backend claude-code --max-configs 15
 ```
+
+The log shows the agent's messages and every tool call as they happen. At the end the script prints the agent's report.
 
 Useful options:
 
 | Option | Meaning |
 |---|---|
-| `--max-configs N` | Most configurations to test (default: `agent.max_configs` in the YAML, else 20). The first point, failed points and resumed points all count toward this limit |
+| `--max-configs N` | Most measurements (default: `agent.max_configs` in the YAML, else 20). Failed, repeated and resumed measurements all count toward this limit |
 | `--agent-backend api\|claude-code` | How to reach Claude (default `api`) |
 | `--agent-model`, `--agent-effort` | Claude model and effort. The model defaults to `claude-opus-5` for `api` and to Claude Code's own default for `claude-code`; effort defaults to `high` |
+| `--agent-max-turns N` | Most agent turns before the run is stopped (default: `agent.max_turns`, else 8 per measurement + 20) |
 | `--claude-bin PATH` | Location of the `claude` executable, if it is not on your `PATH` |
-| `--agent-seed first\|none` | `first` (the default) measures every parameter at its first listed value before asking Claude. `none` lets Claude choose the first point too |
-| `--resume` | Keep the points from an earlier agent run and continue up to `--max-configs` |
+| `--resume` | Give the agent the measurements from an earlier agent run and continue up to `--max-configs` |
 | `--point-timeout`, `--server`, `--dns-service`, `--output-dir` | Same as `grid_search.py` |
 
-Claude may propose any value within each parameter's `agent:` bounds in `agent_search.yaml`, for example:
+Claude may measure any value within each parameter's `agent:` bounds in `agent_search.yaml`, for example:
 
 ```yaml
 - name: rmem
@@ -104,7 +116,7 @@ Claude may propose any value within each parameter's `agent:` bounds in `agent_s
   agent: {type: int, min: 212992, max: 268435456, description: "net.core.rmem_max + rmem_default"}
 ```
 
-A parameter's `type` sets what Claude can propose:
+A parameter's `type` sets what Claude can choose:
 - `int`: any whole number between `min` and `max`.
 - `pair`: a value of the form `"<a>/<b>"`, with each part inside its own bounds.
 - `enum`: only the listed choices.
@@ -115,8 +127,9 @@ Both scripts write to `results/grid_search/`:
 
 | File | Contents |
 |---|---|
-| `grid_results.csv`, `coordinate_descent_results.csv`, `agent_results.csv` | One row per configuration: parameter values, `status`, `max_qps_passed`, and whether the QPS ceiling was hit. Agent runs also record the agent's reasoning |
-| `agent_transcript.jsonl` | Every prompt sent to Claude and every response |
+| `grid_results.csv`, `coordinate_descent_results.csv`, `agent_results.csv` | One row per measurement: parameter values, `status`, `max_qps_passed`, and whether the QPS ceiling was hit. Agent runs also record the agent's `hypothesis`, and `repeat_of` for repeated measurements (their `point_id` ends in `__rep2`, `__rep3`, ...) |
+| `agent_report.json` | The agent's recommended configuration, its score, and the agent's written report |
+| `agent_transcript.jsonl` | The agent's whole session: prompt, responses, and every tool call and result |
 | `runs/<point>/` | Per-trial output for each configuration |
 
 When a run ends or is interrupted, the scripts restore the name server's base configuration. If that restore fails, the script exits with code 3 and says what to reinstall or reboot.

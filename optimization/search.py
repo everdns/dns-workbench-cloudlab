@@ -184,9 +184,12 @@ class Evaluator:
         self.store.export_json(SCRIPT_NAME, f"{self.results_name}.json")
         return path
 
-    def evaluate(self, overrides, label, extra=None):
-        """Return the row for ``overrides``, measuring it only if needed."""
-        pid = point_id(overrides)
+    def evaluate(self, overrides, label, extra=None, pid=None):
+        """Return the row for ``overrides``, measuring it only if needed.
+
+        ``pid`` defaults to point_id(overrides); pass a distinct id to measure
+        the same configuration again (e.g. to gauge noise)."""
+        pid = pid or point_id(overrides)
         if pid in self.rows:
             log.info("%s Reusing %s (already recorded)", label, pid)
             return self.rows[pid]

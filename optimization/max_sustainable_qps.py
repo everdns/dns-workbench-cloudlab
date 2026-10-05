@@ -419,13 +419,32 @@ def wait_for_dns_ready(config, timeout=300):
     deadline = time.time() + timeout
 
     while time.time() < deadline:
-        result = ssh_run(client, f"dig @{server}", timeout=5)
+        try:
+            result = ssh_run(client, f"dig @{server}", timeout=5)
+        except subprocess.TimeoutExpired:
+            time.sleep(1)
+            continue
         if result.returncode == 0 and result.stdout.strip():
             log.info("DNS server at %s is ready", server)
             return True
         time.sleep(1)
 
     raise TimeoutError(f"DNS server at {server} not ready after {timeout}s")
+
+
+def reset_clients(config, tool):
+    """Undo client-side state a previous, interrupted run may have left behind
+    (e.g. an XDP program still attached by a killed kxdpgun)."""
+    command = tool.cleanup_command(config)
+    if not command:
+        return
+    clients = get_clients(config)
+    results = ssh_run_many({host: command for host in clients}, timeout=30)
+    for host in clients:
+        _, stderr, rc, timed_out = extract_run_result(results[host])
+        if timed_out or rc != 0:
+            log.warning("Client cleanup on %s failed (%s): %s", host,
+                        "timed out" if timed_out else f"rc={rc}", stderr.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -651,6 +670,11 @@ class Tool(ABC):
         """Check tool-specific constraints. Raise ValueError on violation."""
         pass
 
+    def cleanup_command(self, config):
+        """Shell command that undoes any client-side state this tool leaves
+        behind when it is killed mid-run, or None if there is nothing to undo."""
+        return None
+
 
 class Dnsperf(Tool):
     name = "dnsperf"
@@ -720,12 +744,18 @@ class Kxdpgun(Tool):
         input_file = config["input_file"]
         interface = config["client_interface"]
 
+        # Detach the XDP program even when kxdpgun fails, keeping its exit
+        # status. A program left attached swallows every reply on the
+        # interface, so later readiness checks and trials all time out.
         return (
             f"sudo kxdpgun -t {runtime} -Q {qps}"
             f" -i {input_file} -I {interface}"
             f" {server} --mode generic"
-            f" && sudo ip link set dev eno1d1 xdpgeneric off"
+            f"; rc=$?; {self.cleanup_command(config)}; exit $rc"
         )
+
+    def cleanup_command(self, config):
+        return f"sudo ip link set dev {config['client_interface']} xdpgeneric off"
 
     def parse_output(self, stdout):
         result = ToolResult(raw_output=stdout)
@@ -1300,6 +1330,7 @@ def run_max_sustainable_qps(config, output_dir, simulate_max_qps=None):
     manage_service = not simulating and not config.get("dry_run")
 
     if manage_service:
+        reset_clients(config, params["tool"])
         stop_dns_service(config)
         time.sleep(2)
         start_dns_service(config, params["dns_service"])
@@ -1309,6 +1340,10 @@ def run_max_sustainable_qps(config, output_dir, simulate_max_qps=None):
         summary = run_search(config, params, trial_store, level_store)
     finally:
         if manage_service:
+            try:
+                reset_clients(config, params["tool"])
+            except Exception as e:
+                log.warning("Failed to reset clients: %s", e)
             try:
                 stop_dns_service(config, params["dns_service"])
             except Exception as e:
