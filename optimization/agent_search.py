@@ -18,6 +18,14 @@ failed and repeated ones included). Each measurement is installed, measured
 and restored exactly as grid_search.py does it (search.Evaluator). When the
 run ends or is interrupted, the base configuration is restored.
 
+With --mode open (or agent.mode: open) there are no parameters or bounds.
+Each measurement is any named.conf.options statements plus any root shell
+commands on the name server, optionally followed by a reboot, and
+inspect_server runs any command. Only BIND's protected statements are refused.
+host_state.py snapshots the server before the search and restores it after
+every measurement (rebooting if the kernel command line changed). The agent
+sees whatever it could not restore as residual drift.
+
 Claude is reached one of two ways (--agent-backend, or agent.backend):
 
   api          The Anthropic API, billed as API usage (Console credits):
@@ -39,8 +47,10 @@ import sys
 import time
 
 from agent_runner import BACKENDS, DEFAULT_MODEL, make_runner
-from agent_tools import AgentError, SearchTools, Transcript, build_search_space
+from agent_tools import (AgentError, OpenEvaluator, OpenSearchTools, SearchTools,
+                         Transcript, build_search_space)
 from bind_config import load_base_options
+import host_state
 from search import (
     OPTIMIZATION_DIR,
     SCRIPT_NAME,
@@ -56,6 +66,8 @@ log = logging.getLogger("agent_search")
 
 DEFAULT_CONFIG = os.path.join(OPTIMIZATION_DIR, "agent_search.yaml")
 RESULTS_NAME = "agent_results"
+OPEN_RESULTS_NAME = "agent_open_results"
+MODES = ["bounded", "open"]
 REPORT_NAME = "agent_report.json"
 DEFAULT_MAX_CONFIGS = 20
 EFFORTS = ["low", "medium", "high", "xhigh", "max"]
@@ -63,12 +75,21 @@ EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 # Settings from the base config that tell the agent how points are scored.
 CONTEXT_KEYS = ["dns_service", "tool", "threads", "ports_per_thread",
                 "max_sustainable_qps"]
+# Open mode also tells the agent which hosts and interface it must not break.
+OPEN_CONTEXT_KEYS = CONTEXT_KEYS + ["hosts", "client_interface"]
 
 
-def default_max_turns(max_configs):
+def default_max_turns(max_configs, mode="bounded"):
     """Room for a few tool calls (results, details, diagnostics) per
-    measurement, plus planning and the report."""
-    return 8 * max_configs + 20
+    measurement, plus planning and the report. Open mode inspects more."""
+    return (12 if mode == "open" else 8) * max_configs + 20
+
+
+def known_knobs(parameters):
+    """The config's parameters, shown to an open-mode agent as ideas."""
+    return [{"name": p["name"],
+             "description": (p.get("agent") or {}).get("description", ""),
+             "values_tried": p.get("values", [])} for p in parameters]
 
 
 def main():
@@ -79,6 +100,12 @@ def main():
     parser.add_argument("--config", default=DEFAULT_CONFIG,
                         help="YAML defining the parameters, agent settings and "
                              "the search config")
+    parser.add_argument("--mode", choices=MODES,
+                        help="bounded: the agent picks values for the config's "
+                             "parameters, within their agent: bounds. open: the "
+                             "agent may apply any named.conf.options statements "
+                             "and any root commands on the name server (default: "
+                             "agent.mode, else bounded)")
     parser.add_argument("--max-configs", type=int,
                         help="Most measurements to make, failed, repeated and "
                              "resumed ones included (default: agent.max_configs "
@@ -133,8 +160,13 @@ def main():
                    else agent_settings.get("max_configs", DEFAULT_MAX_CONFIGS))
     if max_configs < 1:
         parser.error("--max-configs must be >= 1")
+    mode = args.mode or agent_settings.get("mode", "bounded")
+    if mode not in MODES:
+        parser.error(f"agent.mode must be one of {MODES}")
+    reboot_timeout = agent_settings.get("reboot_timeout",
+                                        host_state.DEFAULT_REBOOT_TIMEOUT)
     max_turns = (args.agent_max_turns or agent_settings.get("max_turns")
-                 or default_max_turns(max_configs))
+                 or default_max_turns(max_configs, mode))
     if max_turns < 1:
         parser.error("--agent-max-turns must be >= 1")
     backend_name = args.agent_backend or agent_settings.get("backend", "api")
@@ -169,14 +201,18 @@ def main():
         log.error("No name server host configured")
         return 2
 
-    try:
-        space = build_search_space(parameters)
-    except ValueError as e:
-        log.error("%s: %s", args.config, e)
-        return 2
+    space = []
+    if mode == "bounded":
+        try:
+            space = build_search_space(parameters)
+        except ValueError as e:
+            log.error("%s: %s", args.config, e)
+            return 2
 
-    log.info("=== Agent search over %d parameter(s), at most %d measurement(s), "
-             "%s backend, model %s (effort %s)%s ===", len(parameters), max_configs,
+    log.info("=== Agent search (%s mode) %s, at most %d measurement(s), "
+             "%s backend, model %s (effort %s)%s ===", mode,
+             f"over {len(parameters)} parameter(s)" if mode == "bounded"
+             else "over anything on the name server", max_configs,
              backend_name, model or "default", effort,
              " [DRY RUN]" if args.dry_run else "")
     for spec in space:
@@ -195,30 +231,55 @@ def main():
         log.error("%s", e)
         return 2
 
-    resumed = previous_rows(search_output_dir, f"{RESULTS_NAME}.csv") if args.resume else []
+    results_name = OPEN_RESULTS_NAME if mode == "open" else RESULTS_NAME
+    resumed = (previous_rows(search_output_dir, f"{results_name}.csv")
+               if args.resume else [])
     if resumed:
         log.info("Resuming: %d measurement(s) already recorded", len(resumed))
 
     base_text = load_base_options()
-    system_baseline = None
-    if not args.dry_run and any(system_config.is_system_parameter(p["name"])
-                                for p in parameters):
-        try:
-            system_baseline = system_config.snapshot(server)
-        except SystemConfigError as e:
-            log.error("Could not snapshot host settings on %s: %s", server, e)
-            return 2
-
-    evaluator = Evaluator(config, server, base_text, system_baseline,
-                          search_output_dir, RESULTS_NAME, args.point_timeout,
-                          resumed)
     transcript = Transcript(os.path.join(results_dir, "agent_transcript.jsonl"))
-    tools = SearchTools(
-        space, evaluator,
-        context={key: config[key] for key in CONTEXT_KEYS if key in config},
-        max_configs=max_configs, transcript=transcript, server=server,
-        dry_run=args.dry_run,
-    )
+    system_baseline = None
+    if mode == "open":
+        host_baseline = None
+        if not args.dry_run:
+            try:
+                host_baseline = host_state.snapshot(server, save_files=True)
+            except host_state.HostStateError as e:
+                log.error("Could not snapshot the host state on %s: %s", server, e)
+                return 2
+            snapshot_path = os.path.join(results_dir, "host_baseline.json")
+            os.makedirs(results_dir, exist_ok=True)
+            with open(snapshot_path, "w") as f:
+                json.dump(host_baseline, f, indent=1)
+            log.info("Host baseline written to %s", snapshot_path)
+        evaluator = OpenEvaluator(config, server, base_text, host_baseline,
+                                  search_output_dir, results_name,
+                                  args.point_timeout, resumed,
+                                  reboot_timeout=reboot_timeout)
+        tools = OpenSearchTools(
+            known_knobs(parameters), evaluator,
+            context={key: config[key] for key in OPEN_CONTEXT_KEYS if key in config},
+            max_configs=max_configs, transcript=transcript, server=server,
+            dry_run=args.dry_run,
+        )
+    else:
+        if not args.dry_run and any(system_config.is_system_parameter(p["name"])
+                                    for p in parameters):
+            try:
+                system_baseline = system_config.snapshot(server)
+            except SystemConfigError as e:
+                log.error("Could not snapshot host settings on %s: %s", server, e)
+                return 2
+        evaluator = Evaluator(config, server, base_text, system_baseline,
+                              search_output_dir, results_name, args.point_timeout,
+                              resumed)
+        tools = SearchTools(
+            space, evaluator,
+            context={key: config[key] for key in CONTEXT_KEYS if key in config},
+            max_configs=max_configs, transcript=transcript, server=server,
+            dry_run=args.dry_run,
+        )
     started = time.time()
 
     status = 0
@@ -232,7 +293,10 @@ def main():
             path = evaluator.export()
             if path:
                 log.info("Results written to %s", path)
-            restore_or_exit(server, base_text, system_baseline)
+            if mode == "open":
+                evaluator.restore_host()
+            else:
+                restore_or_exit(server, base_text, system_baseline)
 
     if args.dry_run:
         return status
@@ -250,6 +314,12 @@ def main():
         os.makedirs(results_dir, exist_ok=True)
         with open(report_path, "w") as f:
             json.dump(tools.report, f, indent=2, default=str)
+        script = tools.report.get("recommended_apply_script")
+        if script:
+            script_path = os.path.join(results_dir, "recommended_apply.sh")
+            with open(script_path, "w") as f:
+                f.write(script)
+            log.info("Commands for the recommended change: %s", script_path)
         log.info("Agent recommends %s (%s QPS)",
                  tools.report["recommended_point_id"],
                  tools.report["recommended_max_qps_passed"])

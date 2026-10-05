@@ -60,7 +60,7 @@ A Claude agent runs the search from start to finish. The script connects it to t
 | `measure_configuration` | Installs a configuration, measures it, restores the base, and returns the score and per-level answer rates. Uses one measurement from the budget. With `repeat=true` it re-measures a configuration that was already tested, to check noise |
 | `get_results` | Lists every measurement so far, with the budget left and the best result |
 | `get_run_details` | Shows per-level and per-trial results for one measurement |
-| `inspect_server` | Runs a fixed read-only diagnostic on the name server: `udp_counters`, `softnet_stat`, `sysctls`, `firewall`, `nic`, `cpu`, `named`, or `memory`. The agent cannot run any other command |
+| `inspect_server` | Runs a fixed read-only diagnostic on the name server: `udp_counters`, `softnet_stat`, `sysctls`, `firewall`, `nic`, `cpu`, `named`, or `memory`. In bounded mode the agent cannot run any other command; in open mode it can run any command |
 | `finish` | Ends the search with a recommended configuration and a written report |
 
 The agent chooses the order of measurements, including whether to start from the baseline (every parameter at its first listed value). It decides when a result needs a repeat, when to look at drop counters, and when to stop. The script sets the limits: every value must be inside the `agent:` bounds in `agent_search.yaml`, and the run stops at `--max-configs` measurements. A rejected call goes back to the agent as an error and never reaches the server.
@@ -100,10 +100,11 @@ Useful options:
 
 | Option | Meaning |
 |---|---|
+| `--mode bounded\|open` | Search only the YAML parameters within their bounds, or let Claude change anything on the name server (default: `agent.mode`, else `bounded`) |
 | `--max-configs N` | Most measurements (default: `agent.max_configs` in the YAML, else 20). Failed, repeated and resumed measurements all count toward this limit |
 | `--agent-backend api\|claude-code` | How to reach Claude (default `api`) |
 | `--agent-model`, `--agent-effort` | Claude model and effort. The model defaults to `claude-opus-5` for `api` and to Claude Code's own default for `claude-code`; effort defaults to `high` |
-| `--agent-max-turns N` | Most agent turns before the run is stopped (default: `agent.max_turns`, else 8 per measurement + 20) |
+| `--agent-max-turns N` | Most agent turns before the run is stopped (default: `agent.max_turns`, else 8 per measurement + 20, or 12 in open mode) |
 | `--claude-bin PATH` | Location of the `claude` executable, if it is not on your `PATH` |
 | `--resume` | Give the agent the measurements from an earlier agent run and continue up to `--max-configs` |
 | `--point-timeout`, `--server`, `--dns-service`, `--output-dir` | Same as `grid_search.py` |
@@ -120,6 +121,30 @@ A parameter's `type` sets what Claude can choose:
 - `int`: any whole number between `min` and `max`.
 - `pair`: a value of the form `"<a>/<b>"`, with each part inside its own bounds.
 - `enum`: only the listed choices.
+
+### Open mode: no bounds
+
+With `--mode open` (or `agent.mode: open`, the setting in `agent_search.yaml`), Claude is not limited to the parameter list. Each measurement can contain:
+
+- `named_options`: any `named.conf.options` statements. A statement with the same keyword as one in the base file replaces it, and `named-checkconf` validates the result. Only the protected statements (`listen-on`, `listen-on-v6`, `allow-query`, `recursion`, `rate-limit`, `directory`) are refused.
+- `host_commands`: any shell commands, run as root on the name server before the measurement. This covers sysctls, ethtool, IRQ affinity, RPS/XPS, CPU governor and C-states, services, systemd drop-ins for `named`, and kernel modules.
+- `revert_commands`: any shell commands, run as root after the measurement.
+- `reboot_after_apply`: reboot after `host_commands`, for kernel command-line changes made through `/etc/default/grub` and `update-grub`.
+
+`inspect_server` accepts any command, as well as the named probes. The parameters in the YAML are shown to Claude only as ideas.
+
+Before the search starts, `host_state.py` takes a snapshot of the name server. It records:
+- every writable sysctl
+- the tuning files in sysfs: IRQ affinity, RPS/XPS, NIC queue settings, CPU online state, governors, C-states, THP, and module parameters
+- the per-NIC ethtool state: rings, channels, coalescing, offloads, RSS, ntuple rules and flow hashing
+- the root qdisc, running services, iptables rules and loaded modules
+- the config files under grub, sysctl.d, modprobe.d, systemd, limits, bind, ufw, udev, netplan and tuned. These are also saved to `/var/tmp/agent_baseline.tgz` on the server.
+
+After every measurement, the script writes back whatever differs from the snapshot. If the kernel command line changed, that includes `update-grub` and a reboot. It then reports anything still different to Claude as `residual_drift`.
+
+The server is reset with the snapshot, not by reinstalling it, so a change outside what the snapshot covers needs the agent's `revert_commands`. The agent is told not to break SSH or the experiment network, but the script does not prevent it. The name server must be a different machine from the one running `agent_search.py`, because reboots are refused otherwise.
+
+Open-mode runs write `agent_open_results.csv`, `host_baseline.json`, `applied.json` in each run directory, and `recommended_apply.sh` with the commands for the winning change.
 
 ## Results
 

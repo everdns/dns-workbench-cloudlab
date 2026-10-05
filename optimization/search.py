@@ -184,6 +184,18 @@ class Evaluator:
         self.store.export_json(SCRIPT_NAME, f"{self.results_name}.json")
         return path
 
+    def _apply(self, overrides, run_dir):
+        """Install ``overrides`` on the name server. Raises BindConfigError or
+        SystemConfigError if it cannot be applied."""
+        bind_overrides, system_overrides = split_overrides(overrides)
+        rendered = render_options(self.base_text, bind_overrides)
+        install_options(self.server, rendered)
+        system_config.apply(self.server, system_overrides)
+
+    def _restore(self, overrides, run_dir):
+        """Put the base configuration back. Returns extra row fields, if any."""
+        restore_or_exit(self.server, self.base_text, self.system_baseline)
+
     def evaluate(self, overrides, label, extra=None, pid=None):
         """Return the row for ``overrides``, measuring it only if needed.
 
@@ -212,28 +224,25 @@ class Evaluator:
         }
         self.rows[pid] = row
 
+        run_dir = os.path.join(self.output_dir, SCRIPT_NAME, "runs", run_dir_name(pid))
         try:
-            bind_overrides, system_overrides = split_overrides(overrides)
-            rendered = render_options(self.base_text, bind_overrides)
-            install_options(self.server, rendered)
-            system_config.apply(self.server, system_overrides)
+            self._apply(overrides, run_dir)
         except (BindConfigError, SystemConfigError) as e:
             log.error("Configuration update failed: %s", e)
             row["status"] = "config_failed"
             row["error"] = str(e)
+            row.update(self._restore(overrides, run_dir) or {})
             self.store.add_result(row)
             self.export()
-            restore_or_exit(self.server, self.base_text, self.system_baseline)
             return row
 
-        run_dir = os.path.join(self.output_dir, SCRIPT_NAME, "runs", run_dir_name(pid))
         row["run_dir"] = run_dir
         try:
             status, summary, trial_rows = run_evaluation(
                 self.config, run_dir, timeout=self.timeout,
             )
         finally:
-            restore_or_exit(self.server, self.base_text, self.system_baseline)
+            row.update(self._restore(overrides, run_dir) or {})
 
         row["status"] = status
         if status == "ok":

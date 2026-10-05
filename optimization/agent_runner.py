@@ -22,7 +22,7 @@ import sys
 import tempfile
 import threading
 
-from agent_tools import SYSTEM_PROMPT, AgentError
+from agent_tools import AgentError
 
 log = logging.getLogger("agent_runner")
 
@@ -72,13 +72,13 @@ class ApiRunner:
             client = anthropic.Anthropic(default_headers=headers)
         self.client = client
 
-    def _stream(self, messages, tool_defs):
+    def _stream(self, messages, tool_defs, system):
         import anthropic
         try:
             with self.client.beta.messages.stream(
                 model=self.model,
                 max_tokens=64000,
-                system=SYSTEM_PROMPT,
+                system=system,
                 tools=tool_defs,
                 messages=messages,
                 thinking={"type": "adaptive", "display": "summarized"},
@@ -104,11 +104,11 @@ class ApiRunner:
         prompt = tools.initial_prompt()
         messages = [{"role": "user", "content": prompt}]
         transcript.record("prompt", backend=self.name, model=self.model,
-                          system=SYSTEM_PROMPT, prompt=prompt)
+                          system=tools.system_prompt, prompt=prompt)
         nudges = 0
 
         for turn in range(1, self.max_turns + 1):
-            response = self._stream(messages, tool_defs)
+            response = self._stream(messages, tool_defs, tools.system_prompt)
             # Append the full content: thinking blocks must go back unchanged.
             messages.append({"role": "assistant", "content": response.content})
             usage = getattr(response, "usage", None)
@@ -226,14 +226,14 @@ class ClaudeCodeRunner:
                              if f is not None}
         self._usage = {}
         # A measurement can run up to --point-timeout; leave margin for the
-        # install and restore around it.
-        self.tool_timeout_ms = (tool_timeout_s + 900) * 1000
+        # install and restore around it, including reboots in open mode.
+        self.tool_timeout_ms = (tool_timeout_s + 3600) * 1000
         if shutil.which(claude_bin) is None:
             raise AgentError(
                 f"'{claude_bin}' not found. Install Claude Code and log in, or "
                 "pass --claude-bin with its path.")
 
-    def _command(self, socket_path):
+    def _command(self, socket_path, system):
         mcp_config = {"mcpServers": {MCP_SERVER_NAME: {
             "type": "stdio",
             "command": sys.executable,
@@ -246,7 +246,7 @@ class ClaudeCodeRunner:
             "--strict-mcp-config",
             "--allowedTools", f"mcp__{MCP_SERVER_NAME}",
             "--disallowedTools", *CLAUDE_CODE_DISALLOWED,
-            "--append-system-prompt", SYSTEM_PROMPT,
+            "--append-system-prompt", system,
             "--no-session-persistence",
             "--max-turns", str(self.max_turns),
         ]
@@ -314,14 +314,15 @@ class ClaudeCodeRunner:
     def run(self, tools, transcript):
         prompt = tools.initial_prompt()
         transcript.record("prompt", backend=self.name, model=self.model,
-                          system=SYSTEM_PROMPT, prompt=prompt)
+                          system=tools.system_prompt, prompt=prompt)
         env = {**os.environ, "MCP_TOOL_TIMEOUT": str(self.tool_timeout_ms)}
 
         with ToolRelay(tools) as relay, \
                 tempfile.TemporaryDirectory(prefix="agent_search_") as workdir, \
                 tempfile.TemporaryFile(mode="w+") as stderr:
             proc = subprocess.Popen(
-                self._command(relay.socket_path), cwd=workdir, env=env,
+                self._command(relay.socket_path, tools.system_prompt),
+                cwd=workdir, env=env,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr,
                 text=True,
             )

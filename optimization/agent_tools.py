@@ -33,19 +33,24 @@ default when there is no ``agent:`` block; choices are ``values`` unless
 ``values``.
 """
 import csv
+import hashlib
 import inspect
 import json
 import logging
 import os
+import re
+import shlex
 import subprocess
 import threading
 import time
 
 import bind_config
+import host_state
 import system_config
 from bind_config import BindConfigError
 from max_sustainable_qps import ssh_run
-from search import point_id, row_qps, split_overrides
+from search import (EXIT_RESTORE_FAILED, Evaluator, point_id, restore_or_exit,
+                    row_qps, split_overrides)
 from system_config import SystemConfigError
 
 log = logging.getLogger("agent_tools")
@@ -363,6 +368,7 @@ class SearchTools:
         self.transcript = transcript
         self.server = server
         self.dry_run = dry_run
+        self.system_prompt = SYSTEM_PROMPT
         self.report = None
         self.dry_run_done = False
         # Set by the runner (e.g. a usage limit was reached): no further
@@ -677,6 +683,463 @@ class SearchTools:
             "recommended_point_id": recommended_point_id or None,
             "recommended_configuration": ({spec["name"]: row.get(spec["name"])
                                            for spec in self.space} if row else None),
+            "recommended_max_qps_passed": row_qps(row) if row else None,
+            "summary": summary,
+            **self._budget(),
+        }
+        log.info("Agent finished. Recommended: %s", recommended_point_id or "(none)")
+        return "Search finished. End your turn now."
+
+
+# ---------------------------------------------------------------------------
+# Open mode (agent_search.py --mode open)
+#
+# No parameter list: a measurement is any set of named.conf.options
+# statements plus any root shell commands on the name server, optionally
+# followed by a reboot. host_state.py puts the server back afterwards.
+# ---------------------------------------------------------------------------
+
+OPEN_SYSTEM_PROMPT = """\
+You are running a performance-tuning campaign on an authoritative DNS name \
+server (BIND on Linux). The goal is the highest max sustainable QPS: the \
+highest query rate at which the server still answers nearly every query, as \
+measured by a load generator on separate client machines. You are in charge \
+of the whole search: what to change, what to measure, when to repeat a \
+measurement, when to look at the server, and when to stop.
+
+You may change anything on the name server. A configuration is:
+- named_options: any named.conf.options statements (each one complete and \
+ending in ';', e.g. "tcp-clients 1000;" or "reuseport yes;"). They replace a \
+base statement with the same keyword. named-checkconf validates the file. The \
+protected statements (listen-on, listen-on-v6, allow-query, recursion, \
+rate-limit, directory) are refused.
+- host_commands: any shell commands, each run as root with bash on the name \
+server, in order, before the measurement: sysctls, ethtool (rings, channels, \
+coalescing, offloads, RSS, ntuple, flow hashing), IRQ affinity, RPS/XPS, \
+CPU governor/frequency/C-states, THP, irqbalance and other services, systemd \
+drop-ins for named (CPU affinity, limits, scheduling), named's command-line \
+options, the GRUB kernel command line (edit /etc/default/grub, run update-grub, \
+set reboot_after_apply=true), modules, and so on. A failing command (nonzero \
+exit) aborts the measurement as config_failed.
+- revert_commands: run as root after the measurement, before the automatic \
+restore. Use them to undo anything the automatic restore does not cover.
+- reboot_after_apply: reboot the server after host_commands (needed for \
+kernel command-line changes; several minutes each way, because restoring also \
+reboots). The server boots the kernel it started on, unless your \
+host_commands run grub-reboot or grub-set-default.
+
+After every measurement the server is put back automatically. That covers: \
+every writable sysctl; IRQ affinity, RPS/XPS, NIC mtu/txqueuelen/\
+gro_flush_timeout/napi settings; CPU online state, governors, frequencies, \
+C-state disable flags, intel_pstate, THP; writable module parameters; per-NIC \
+ethtool rings, channels, coalescing, offloads, RSS table and key, ntuple \
+rules, rx-flow-hash and root qdisc; running services and the tuned profile; \
+iptables/ip6tables rules; modules you loaded; and the files under \
+/etc/default/grub*, /etc/sysctl*, /etc/modprobe.d, /etc/modules-load.d, \
+/etc/systemd/system, /etc/security/limits*, /etc/bind, /etc/ufw, \
+/etc/udev/rules.d, /etc/netplan and /etc/tuned (then the kernel command line, \
+with a reboot if it changed). Anything else you change must be undone by your \
+revert_commands. Every result reports residual_drift: what still differs from \
+the starting state after the restore. If it is not empty, later measurements \
+no longer start from the same baseline. Fix it (a measurement with only \
+host_commands that undo it) or account for it.
+
+Do not break the server's SSH access or the experiment network (the hosts and \
+client_interface in the measurement setup). The harness cannot recover from \
+that, and the run ends.
+
+Your tools:
+- measure_configuration applies a configuration, measures it (several \
+minutes), restores the server, and returns the result. Each call uses one \
+measurement from a small fixed budget, even if it fails. The empty \
+configuration (no statements, no commands) is the baseline.
+- get_results lists every measurement so far. get_run_details shows one \
+measurement in full, with its per-level answer rates.
+- inspect_server runs any shell command on the name server (as your user; \
+use sudo when needed) and returns its output. Use it to read counters, \
+settings and hardware before deciding what to change. It is meant for \
+reading. Anything you change with it is not undone for you and is not part \
+of a measured configuration.
+- finish ends the campaign with your report.
+
+How to work:
+- Look at the hardware first (CPUs, NUMA, NIC driver and queues, IRQs), then \
+form hypotheses about what limits throughput and test the ones that could \
+matter most first. Compare drop counters (softnet_stat, UDP RcvbufErrors, NIC \
+drops) before and after a measurement to see where packets are lost.
+- Runs are noisy. Before you build on a difference of a few percent, or \
+before you recommend a winner, consider repeating it (repeat=true).
+
+Reading a result:
+- max_qps_passed is the score. Higher is better.
+- hit_max_qps_ceiling=True means the search reached its QPS ceiling. The \
+score is then a lower bound, not the server's limit.
+- A min_qps_fidelity_pct below the configured threshold means the load \
+generator could not send the target rate. That score reflects the client, not \
+the server.
+- status config_failed means the configuration could not be applied (see \
+error). timeout or failed means the measurement did not finish.
+
+When you have used the budget, or you are confident more measurements cannot \
+beat the best result, call finish. Recommend the configuration you trust most, \
+say how sure you are and why, and explain what you learned about what limits \
+this server. Call finish exactly once, then end your turn."""
+
+CHANGE_FIELDS = ["named_options", "host_commands", "revert_commands"]
+HOST_COMMAND_TIMEOUT = 900
+INSPECT_TIMEOUT = 120
+
+
+def _string_list(name, value):
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise AgentError(f"{name} must be a list of strings")
+    return [v for v in value if v.strip()]
+
+
+def encode_change(label, named_options, host_commands, revert_commands, reboot):
+    """A change as a row's override fields (JSON strings, so they survive CSV)."""
+    return {"label": label,
+            "named_options": json.dumps(named_options),
+            "host_commands": json.dumps(host_commands),
+            "revert_commands": json.dumps(revert_commands),
+            "reboot_after_apply": bool(reboot)}
+
+
+def decode_change(row):
+    """The change recorded in a row (or override fields), as plain values."""
+    change = {"label": row.get("label", "")}
+    for field in CHANGE_FIELDS:
+        value = row.get(field) or "[]"
+        change[field] = json.loads(value) if isinstance(value, str) else list(value)
+    reboot = row.get("reboot_after_apply", False)
+    change["reboot_after_apply"] = (reboot if isinstance(reboot, bool)
+                                    else str(reboot).lower() == "true")
+    return change
+
+
+def change_id(change):
+    """Point id: the label, plus a hash of what is actually applied."""
+    content = {k: change[k] for k in CHANGE_FIELDS + ["reboot_after_apply"]}
+    digest = hashlib.sha1(json.dumps(content, sort_keys=True).encode()).hexdigest()[:10]
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", change["label"]).strip("-")[:60]
+    return f"{slug or 'change'}__{digest}"
+
+
+def apply_script(change):
+    """A shell script that applies ``change`` by hand on the name server."""
+    lines = ["#!/bin/bash", f"# {change['label']}", "set -e", ""]
+    if change["named_options"]:
+        lines.append(f"# Add to the options block of {bind_config.INSTALLED_OPTIONS_PATH}:")
+        lines += [f"#     {s}" for s in change["named_options"]]
+        lines.append("")
+    lines += change["host_commands"]
+    if change["reboot_after_apply"]:
+        lines += ["", "sudo systemctl reboot"]
+    return "\n".join(lines) + "\n"
+
+
+def run_as_root(server, command, timeout=HOST_COMMAND_TIMEOUT):
+    """Run one agent command as root on ``server``; returns CompletedProcess."""
+    wrapped = f"timeout {timeout} sudo bash -c {shlex.quote(command)}"
+    return ssh_run(server, wrapped, timeout=timeout + 30)
+
+
+class OpenEvaluator(Evaluator):
+    """Evaluator whose points are free-form changes, restored by host_state."""
+
+    def __init__(self, config, server, base_text, host_baseline, output_dir,
+                 results_name, timeout, resumed_rows=(), reboot_timeout=900):
+        super().__init__(config, server, base_text, None, output_dir,
+                         results_name, timeout, resumed_rows)
+        self.host_baseline = host_baseline
+        self.reboot_timeout = reboot_timeout
+
+    def _record(self, run_dir, **fields):
+        os.makedirs(run_dir, exist_ok=True)
+        path = os.path.join(run_dir, "applied.json")
+        data = {}
+        if os.path.exists(path):
+            with open(path) as f:
+                data = json.load(f)
+        data.update(fields)
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+
+    def _apply(self, overrides, run_dir):
+        change = decode_change(overrides)
+        self._record(run_dir, change=change)
+        rendered = bind_config.render_raw_options(self.base_text,
+                                                  change["named_options"])
+        bind_config.install_options(self.server, rendered)
+        for command in change["host_commands"]:
+            log.info("host (root): %s", command)
+            try:
+                result = run_as_root(self.server, command)
+            except subprocess.TimeoutExpired:
+                raise SystemConfigError(f"timed out: {command}")
+            if result.returncode != 0:
+                raise SystemConfigError(
+                    f"rc={result.returncode}: {command}\n"
+                    f"{_clip((result.stderr or result.stdout or '').strip(), 1500)}")
+        if change["reboot_after_apply"]:
+            # Stay on the search's kernel unless the agent picked one itself.
+            picks_kernel = any("grub-reboot" in c or "grub-set-default" in c
+                               for c in change["host_commands"])
+            kernel = None if picks_kernel else self.host_baseline.get("kernel")
+            try:
+                host_state.reboot_and_wait(self.server, self.reboot_timeout, kernel)
+            except host_state.HostStateError as e:
+                raise SystemConfigError(f"reboot failed: {e}")
+
+    def _restore(self, overrides, run_dir):
+        change = decode_change(overrides)
+        revert_errors = []
+        for command in change["revert_commands"]:
+            try:
+                result = run_as_root(self.server, command)
+                if result.returncode != 0:
+                    revert_errors.append(
+                        f"rc={result.returncode}: {command}: "
+                        f"{_clip((result.stderr or '').strip(), 300)}")
+            except subprocess.TimeoutExpired:
+                revert_errors.append(f"timed out: {command}")
+        drift, restore_errors = self.restore_host()
+        self._record(run_dir, revert_errors=revert_errors,
+                     restore_errors=restore_errors,
+                     residual_drift=host_state.summarize(drift, limit=200))
+        return {"revert_errors": json.dumps(revert_errors + restore_errors),
+                "residual_drift": json.dumps(host_state.summarize(drift))}
+
+    def restore_host(self):
+        """Put the whole server back: host state, then named.conf.options.
+        Stops the search if the server cannot be reached or read."""
+        try:
+            drift, errors = host_state.restore(self.server, self.host_baseline,
+                                               self.reboot_timeout)
+        except host_state.HostStateError as e:
+            log.error("Could not restore the host state on %s: %s", self.server, e)
+            log.error("The name server is in an unknown state. Check it (or "
+                      "reboot it) before running again.")
+            raise SystemExit(EXIT_RESTORE_FAILED)
+        restore_or_exit(self.server, self.base_text)
+        return drift, errors
+
+
+class OpenSearchTools(SearchTools):
+    """SearchTools for open mode: free-form changes instead of parameters."""
+
+    def __init__(self, hints, evaluator, context, max_configs, transcript,
+                 server, dry_run=False):
+        super().__init__([], evaluator, context, max_configs, transcript,
+                         server, dry_run)
+        self.hints = hints
+        self.system_prompt = OPEN_SYSTEM_PROMPT
+
+    def _change_view(self, row, full=False):
+        change = decode_change(row)
+        if full:
+            return change
+        return {k: ([_clip(v, 200) for v in change[k]] if k in CHANGE_FIELDS
+                    else change[k])
+                for k in change if change[k] not in ([], False)}
+
+    def _row_view(self, row, full=False):
+        entry = {"point_id": row["point_id"], "change": self._change_view(row, full)}
+        for field in RESULT_FIELDS:
+            value = row.get(field, "")
+            if value not in ("", None):
+                entry[field] = _clip(value) if isinstance(value, str) else value
+        for field in ("residual_drift", "revert_errors"):
+            value = json.loads(row.get(field) or "[]")
+            if value:
+                entry[field] = value
+        return entry
+
+    def definitions(self):
+        definitions = super().definitions()
+        strings = {"type": "array", "items": {"type": "string"}}
+        for d in definitions:
+            if d["name"] == "measure_configuration":
+                d["description"] = (
+                    "Apply a change to the name server (named.conf.options "
+                    "statements, root shell commands, optional reboot), measure "
+                    "its max sustainable QPS (several minutes), restore the "
+                    "server, and return the result with per-level answer rates "
+                    "and any residual drift. Uses one measurement from the "
+                    "budget even if it fails. The empty change is the baseline. "
+                    "A change that was already measured is rejected unless "
+                    "repeat=true.")
+                d["input_schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string",
+                                  "description": "Short name for this change, "
+                                                 "e.g. 'baseline' or 'rss16-coalesce0'"},
+                        "named_options": {**strings, "description":
+                            "named.conf.options statements, each ending in ';'"},
+                        "host_commands": {**strings, "description":
+                            "Shell commands run as root with bash, in order"},
+                        "revert_commands": {**strings, "description":
+                            "Commands run as root after the measurement, before "
+                            "the automatic restore"},
+                        "reboot_after_apply": {"type": "boolean", "description":
+                            "Reboot after host_commands (kernel command line)"},
+                        "hypothesis": {"type": "string", "description":
+                            "What you expect this measurement to show, and why "
+                            "it is worth the budget"},
+                        "repeat": {"type": "boolean", "description":
+                            "Measure an already-measured change again"},
+                    },
+                    "required": ["label", "hypothesis"],
+                    "additionalProperties": False,
+                }
+            elif d["name"] == "inspect_server":
+                d["description"] = (
+                    "Run a shell command on the name server (as your user; use "
+                    "sudo when needed) and return its output, or run one of the "
+                    "named probes. Probes: " + "; ".join(
+                        f"{name}: {desc}" for name, (desc, _) in SERVER_PROBES.items()))
+                d["input_schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string",
+                                    "description": "Any shell command"},
+                        "probe": {"type": "string", "enum": list(SERVER_PROBES)},
+                    },
+                    "additionalProperties": False,
+                }
+            elif d["name"] == "get_run_details":
+                d["description"] = ("The full change, per-QPS-level results and "
+                                    "per-trial results of one measurement, by "
+                                    "point_id.")
+        return definitions
+
+    def initial_prompt(self):
+        rows = [self._row_view(r) for r in self.evaluator.rows.values()]
+        previous = ("\n".join(json.dumps(r) for r in rows) if rows
+                    else "(nothing measured yet)")
+        dry = ("\n\nThis is a DRY RUN: measure_configuration only shows what "
+               "would be applied to the server, and the run ends after your "
+               "first call to it. inspect_server works normally. Choose the "
+               "change you would measure first." if self.dry_run else "")
+        return (
+            "<measurement_setup>\n"
+            f"{json.dumps(self.context, indent=2, default=str)}\n"
+            "</measurement_setup>\n\n"
+            "<base_named_conf_options>\n"
+            f"{self.evaluator.base_text}\n"
+            "</base_named_conf_options>\n\n"
+            "<known_knobs>\n"
+            "Settings that earlier searches tried. They are ideas, not limits.\n"
+            f"{json.dumps(self.hints, indent=2, default=str)}\n"
+            "</known_knobs>\n\n"
+            f"<previous_results count=\"{len(rows)}\">\n{previous}\n"
+            "</previous_results>\n\n"
+            f"Measurement budget: {self.max_configs} in total, "
+            f"{self.remaining()} remaining.\n\n"
+            "Find the configuration with the highest max sustainable QPS. "
+            "Plan how to spend the budget, then begin." + dry
+        )
+
+    def measure_configuration(self, label, hypothesis, named_options=None,
+                              host_commands=None, revert_commands=None,
+                              reboot_after_apply=False, repeat=False):
+        if self.report is not None:
+            raise AgentError("the search has already finished")
+        if self.stop_reason:
+            raise AgentError(f"no more measurements: {self.stop_reason}. Call "
+                             "finish now with your report.")
+        if self.remaining() == 0:
+            raise AgentError("the measurement budget is used up; call finish")
+        named_options = _string_list("named_options", named_options)
+        host_commands = _string_list("host_commands", host_commands)
+        revert_commands = _string_list("revert_commands", revert_commands)
+        try:
+            rendered = bind_config.render_raw_options(self.evaluator.base_text,
+                                                      named_options)
+        except BindConfigError as e:
+            raise AgentError(f"named_options rejected: {e}")
+        overrides = encode_change(label, named_options, host_commands,
+                                  revert_commands, reboot_after_apply)
+        change = decode_change(overrides)
+
+        base_id = change_id(change)
+        pid = base_id
+        previous = [r for r in self.evaluator.rows.values()
+                    if r["point_id"].split("__rep")[0].endswith(base_id[-10:])]
+        if previous:
+            if not repeat:
+                raise AgentError(
+                    "this change was already measured: "
+                    + json.dumps(self._row_view(previous[0]))
+                    + "\nChange it, or pass repeat=true to measure it again.")
+            base_id = previous[0]["point_id"].split("__rep")[0]
+            n = 2
+            while f"{base_id}__rep{n}" in self.evaluator.rows:
+                n += 1
+            pid = f"{base_id}__rep{n}"
+
+        log.info("Agent hypothesis: %s", hypothesis)
+        if self.dry_run:
+            self.dry_run_done = True
+            log.info("[dry run] %s", pid)
+            for line in host_commands:
+                log.info("[dry run] host (root): %s", line)
+            return {
+                "dry_run": True,
+                "point_id": pid,
+                "named.conf.options": rendered,
+                "host_commands": host_commands,
+                "revert_commands": revert_commands,
+                "reboot_after_apply": bool(reboot_after_apply),
+                "note": "Nothing was applied or measured. Call finish now.",
+            }
+
+        label_text = f"[agent {self.used() + 1}/{self.max_configs}]"
+        extra = {"iteration": self.used() + 1, "hypothesis": hypothesis}
+        if pid != base_id:
+            extra["repeat_of"] = base_id
+        row = self.evaluator.evaluate(overrides, label_text, extra, pid=pid)
+        return {**self._row_view(row),
+                "levels": self._levels(row),
+                **self._budget()}
+
+    def get_run_details(self, point_id):
+        details = super().get_run_details(point_id)
+        details.update(self._row_view(self.evaluator.rows[point_id], full=True))
+        return details
+
+    def inspect_server(self, command=None, probe=None):
+        if (command is None) == (probe is None):
+            raise AgentError("give exactly one of command or probe")
+        if probe is not None:
+            return super().inspect_server(probe)
+        try:
+            result = ssh_run(self.server,
+                             f"timeout {INSPECT_TIMEOUT} bash -c {shlex.quote(command)}",
+                             timeout=INSPECT_TIMEOUT + 30)
+        except subprocess.TimeoutExpired:
+            raise AgentError(f"command timed out after {INSPECT_TIMEOUT}s")
+        except OSError as e:
+            raise AgentError(f"command could not run: {e}")
+        output = (result.stdout or "") + (
+            f"\n[stderr]\n{result.stderr}" if (result.stderr or "").strip() else "")
+        return f"[on {self.server}, rc={result.returncode}]\n{output}"
+
+    def finish(self, recommended_point_id, summary):
+        if self.report is not None:
+            return "already finished"
+        if recommended_point_id and recommended_point_id not in self.evaluator.rows:
+            raise AgentError(f"no measurement with point_id "
+                             f"{recommended_point_id!r}; see get_results")
+        row = self.evaluator.rows.get(recommended_point_id)
+        change = decode_change(row) if row else None
+        self.report = {
+            "recommended_point_id": recommended_point_id or None,
+            "recommended_change": change,
+            "recommended_apply_script": apply_script(change) if change else None,
             "recommended_max_qps_passed": row_qps(row) if row else None,
             "summary": summary,
             **self._budget(),
