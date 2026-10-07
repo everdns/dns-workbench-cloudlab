@@ -1,0 +1,23 @@
+# Defaults for launch.py and mcp_server.py. CLI flags / MCP arguments override these.
+
+# Portal project that is charged for the experiment (required; set before launching).
+project: everdns
+
+# The repo-backed profile registered on the CloudLab portal for this repository.
+profile_name: dns-workbench-git
+profile_project: ""        # project that owns the profile; defaults to `project` if empty
+
+# Branch/ref the nodes clone to /local/repository. fully_agentic carries the agent
+# search code; use refs/heads/agentic_configuration for the older branch.
+refspec: refs/heads/fully_agentic
+
+duration: 4                # hours
+max_duration: 24           # hours; launch/extend refuse to go beyond this in one call
+
+# Defaults for the profile parameters in profile.py.
+parameters:
+  num_testers: 1
+  name_server_software: bind
+  name_server_hardware: any
+  tester_hardware: any
+  allow_interswitch_links: false

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cloudlab": {
+      "command": "python3",
+      "args": ["cloudlab_api/mcp_server.py"]
+    }
+  }
+}
