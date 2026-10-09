@@ -724,7 +724,7 @@ class Kxdpgun(Tool):
             f"sudo kxdpgun -t {runtime} -Q {qps}"
             f" -i {input_file} -I {interface}"
             f" {server} --mode generic"
-            f" && sudo ip link set dev eno1d1 xdpgeneric off"
+            f" && sudo ip link set dev {interface} xdpgeneric off"
         )
 
     def parse_output(self, stdout):
