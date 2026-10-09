@@ -2,6 +2,7 @@ hosts:
   server: 10.10.1.1
   clients:
     - 10.10.1.2
+    - 10.10.1.3
 
 client_interface: eno1d1
 input_file: /local/repository/dnsperf_input
@@ -21,9 +22,9 @@ max_sustainable_qps:
   initial_qps: 100000
   min_qps_step: 10000
   max_qps: 3000000
-  num_trials: 3
-  min_passes: 2
-  trial_duration: 5
+  num_trials: 5
+  min_passes: 4
+  trial_duration: 30
   answer_rate_threshold: 99.0
   min_qps_fidelity_pct: 99.0
   collectl: false
