@@ -1,0 +1,216 @@
+<title>DNS Search Results</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column of figures, each with its caption and the numbers behind it. Quiet neutrals; three series colors carry the methods. */
+:root{
+  --bg:#f6f6f3; --surface:#fcfcfb; --line:#e3e2dc; --grid:#ecebe6;
+  --ink:#0b0b0b; --ink2:#52514e; --ink3:#7a7974;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --warn:#b4540a; --warnbg:#fbeee1;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121211; --surface:#1a1a19; --line:#2e2e2b; --grid:#262624;
+  --ink:#ffffff; --ink2:#c3c2b7; --ink3:#908f86;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --warn:#f0a35e; --warnbg:#2b2118; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121211; --surface:#1a1a19; --line:#2e2e2b; --grid:#262624;
+  --ink:#ffffff; --ink2:#c3c2b7; --ink3:#908f86;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --warn:#f0a35e; --warnbg:#2b2118; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:28px 56px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:26px;line-height:1.2;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:17px;margin:0 0 4px;font-weight:600;text-wrap:balance}
+p{margin:0}.sub{color:var(--ink2);max-width:68ch}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.cap{color:var(--ink2);max-width:72ch;margin-bottom:14px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px;font-size:13px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.note{background:var(--warnbg);border:1px solid var(--warn);border-radius:8px;padding:12px 14px;color:var(--ink);font-size:14px}
+.note b{color:var(--warn)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:860px){.grid3{grid-template-columns:minmax(0,1fr)}}
+.panel h3{font-size:14px;margin:0 0 2px;font-weight:600}.panel .meta{font-size:12px;color:var(--ink3);margin-bottom:4px}
+svg{display:block;width:100%;height:auto;overflow:visible}svg text{font-family:var(--sans);fill:var(--ink2);font-size:11px}
+.tt{position:fixed;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:300px;z-index:5;display:none}
+.tt .m{font-family:var(--mono)}.tt .d{color:var(--ink2);margin-top:2px;overflow-wrap:anywhere}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.n{white-space:nowrap}.flag{color:var(--warn);font-size:12px}
+.tag{display:inline-flex;align-items:center;gap:6px}
+details{margin-top:12px}summary{cursor:pointer;color:var(--ink2);font-size:13px}
+details pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;color:var(--ink2);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0 0;overflow-x:auto}
+.foot{font-size:12px;color:var(--ink3)}
+.btn{font:inherit;font-size:12px;color:var(--ink2);background:none;border:1px solid var(--line);border-radius:6px;padding:3px 9px;cursor:pointer}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">CloudLab · BIND · max sustainable QPS</div>
+  <h1>Three searches on three machines</h1>
+  <p class="sub">Each environment (r320, d710, rs620) ran the same three searches against BIND: an agent restricted to a fixed set of parameters, a coordinate-descent grid search, and an agent free to change anything on the name server. Runs were 9–10 October 2026, 5 trials of 30 s per level.</p>
+</header>
+
+<div class="legend" id="legend" aria-label="Search methods"></div>
+
+<section>
+  <h2>Best valid result per search</h2>
+  <p class="cap">Highest max sustainable QPS among measurements that the load generator could fully drive. The r320 and d710 are limited by the name server. The rs620 results are capped near what one load generator can send, so its bars are lower bounds.</p>
+  <div id="fig1"></div>
+  <div class="note" id="note"></div>
+</section>
+
+<section>
+  <h2>How each search progressed</h2>
+  <p class="cap">Dots are individual valid measurements; the line is the best valid result so far. Each panel has its own scale.</p>
+  <div class="grid3" id="fig2"></div>
+</section>
+
+<section>
+  <h2>Why many rs620 results are excluded</h2>
+  <p class="cap">Fidelity is the share of requested queries the load generator actually sent. The search needs at least 99%. Below that, the generator, not the server, sets the score.</p>
+  <div id="fig3"></div>
+</section>
+
+<section>
+  <h2>Winners and what they changed</h2>
+  <div class="tw"><table id="tbl"></table></div>
+  <div id="sums"></div>
+</section>
+
+<p class="foot">Source: <span style="font-family:var(--mono)">leaderboard/data/&lt;environment&gt;/*.json</span>, copied from <span style="font-family:var(--mono)">~/searches</span> on each load generator. A measurement is valid when its status is ok and its lowest trial fidelity is at least 99%.</p>
+</div>
+<div class="tt" id="tt" role="status"></div>
+
+<script>
+const DATA = __DATA__;
+const METHODS = [
+  {k:"1_agent_bounded", name:"Agent, bounded", c:"var(--s1)"},
+  {k:"2_coordinate_descent", name:"Coordinate descent", c:"var(--s2)"},
+  {k:"3_agent_open", name:"Agent, open", c:"var(--s3)"},
+];
+const ENVS = Object.keys(DATA);
+const fmt = n => n==null ? "–" : n.toLocaleString("en-US");
+const k = n => n>=1e6 ? (n/1e6).toFixed(1)+"M" : (n/1e3).toFixed(0)+"k";
+const valid = r => r.qps!=null && r.status==="ok" && (r.fid==null || r.fid>=99);
+const tt = document.getElementById("tt");
+function showTip(ev, html){tt.innerHTML=html;tt.style.display="block";
+  const w=tt.offsetWidth, x=Math.min(ev.clientX+14, innerWidth-w-8); tt.style.left=Math.max(8,x)+"px"; tt.style.top=(ev.clientY+14)+"px"}
+function hideTip(){tt.style.display="none"}
+const ns="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(ns,t);for(const q in a)e.setAttribute(q,a[q]);if(p)p.appendChild(e);return e}
+function txt(p,x,y,s,a={}){const e=el("text",{x,y,...a},p);e.textContent=s;return e}
+
+const stats = {};
+for (const e of ENVS) { stats[e] = {};
+  for (const m of METHODS) { const s = DATA[e].searches[m.k], rows = s.rows, v = rows.filter(valid);
+    const best = v.reduce((a,r)=>!a||r.qps>a.qps?r:a, null), first = rows[0];
+    stats[e][m.k] = {rows, valid:v, best, first, excluded: rows.filter(r=>r.status==="ok" && !valid(r)).length,
+      failed: rows.filter(r=>r.status!=="ok").length, hours: rows.reduce((a,r)=>a+r.hours,0)}; } }
+
+document.getElementById("legend").innerHTML = METHODS.map(m=>`<span><i class="sw" style="background:${m.c}"></i>${m.name}</span>`).join("");
+
+// ---- Figure 1: grouped bars ----
+function fig1(){
+  const host=document.getElementById("fig1"); host.innerHTML="";
+  const W=Math.max(300,host.clientWidth), H=Math.round(Math.min(380,Math.max(260,W*.42)));
+  const m={l:46,r:8,t:18,b:46}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const top=800000, y=v=>m.t+ih-(v/top)*ih;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Best valid max QPS per search and environment"},host);
+  for(let v=0;v<=top;v+=200000){el("line",{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1},svg);
+    txt(svg,m.l-8,y(v)+4,v?k(v):"0",{"text-anchor":"end"})}
+  const gw=iw/ENVS.length, bw=Math.min(54,(gw-36)/3);
+  ENVS.forEach((e,gi)=>{
+    const gx=m.l+gi*gw+gw/2;
+    txt(svg,gx,H-m.b+20,DATA[e].name,{"text-anchor":"middle",style:"font-weight:600;fill:var(--ink)"});
+    txt(svg,gx,H-m.b+34,DATA[e].cpus,{"text-anchor":"middle",style:"fill:var(--ink3)"});
+    METHODS.forEach((mm,bi)=>{
+      const st=stats[e][mm.k]; if(!st.best) return;
+      const x=gx+(bi-1)*(bw+2)-bw/2, yy=y(st.best.qps), h=m.t+ih-yy, r=Math.min(4,h/2);
+      const d=`M${x},${m.t+ih} V${yy+r} Q${x},${yy} ${x+r},${yy} H${x+bw-r} Q${x+bw},${yy} ${x+bw},${yy+r} V${m.t+ih} Z`;
+      const bar=el("path",{d,fill:mm.c,tabindex:0},svg);
+      const gain=st.first.qps? Math.round((st.best.qps/st.first.qps-1)*100):null;
+      const tip=`<b>${mm.name}</b> · ${DATA[e].name}<div class="m">${fmt(st.best.qps)} QPS</div><div class="d">${gain!=null?(gain>=0?"+":"")+gain+"% vs its first measurement ("+fmt(st.first.qps)+")":""}${st.excluded?"<br>"+st.excluded+" measurement(s) excluded as load-generator limited":""}</div>`;
+      bar.addEventListener("mousemove",ev=>showTip(ev,tip)); bar.addEventListener("mouseleave",hideTip);
+      bar.addEventListener("focus",()=>{const b=bar.getBoundingClientRect();showTip({clientX:b.left,clientY:b.top-30},tip)}); bar.addEventListener("blur",hideTip);
+      txt(svg,x+bw/2,yy-6,k(st.best.qps),{"text-anchor":"middle",style:"fill:var(--ink);font-family:var(--mono);font-size:11px"});
+      if(e==="rs620") txt(svg,x+bw/2,yy-19,"≥",{"text-anchor":"middle",style:"fill:var(--ink3);font-size:11px"});
+    });
+  });
+  txt(svg,m.l,10,"max sustainable QPS",{style:"fill:var(--ink3)"});
+}
+
+// ---- Figure 2: progress small multiples ----
+function fig2(){
+  const host=document.getElementById("fig2"); host.innerHTML="";
+  ENVS.forEach(e=>{
+    const div=document.createElement("div"); div.className="panel";
+    div.innerHTML=`<h3>${DATA[e].name}</h3><div class="meta">${DATA[e].cpus}${e==="rs620"?" · lower bound":""}</div>`; host.appendChild(div);
+    const W=Math.max(220,div.clientWidth), H=Math.round(W*.78), m={l:40,r:8,t:8,b:26}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+    const all=METHODS.flatMap(mm=>stats[e][mm.k].valid), maxQ=Math.max(...all.map(r=>r.qps)), maxI=Math.max(...METHODS.flatMap(mm=>stats[e][mm.k].rows.map(r=>r.i)));
+    const step=maxQ>600000?200000:maxQ>300000?100000:50000, top=Math.ceil(maxQ*1.06/step)*step;
+    const x=i=>m.l+((i-1)/(Math.max(maxI,2)-1))*iw, y=v=>m.t+ih-(v/top)*ih;
+    const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":`Search progress on ${DATA[e].name}`},div);
+    for(let v=0;v<=top;v+=step){el("line",{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),stroke:"var(--grid)"},svg);txt(svg,m.l-6,y(v)+4,v?k(v):"0",{"text-anchor":"end"})}
+    const xt=maxI>30?10:5; for(let i=1;i<=maxI;i+= (i===1?xt-1:xt)){txt(svg,x(i),H-8,i,{"text-anchor":"middle"})}
+    txt(svg,W-m.r,H-8,"measurement #",{"text-anchor":"end",style:"fill:var(--ink3)"});
+    METHODS.forEach(mm=>{
+      const st=stats[e][mm.k]; let best=0, path="", prev=null; const pts=[];
+      st.rows.forEach(r=>{ if(!valid(r)) return; if(r.qps>best) best=r.qps;
+        path += (path?` H${x(r.i)} V${y(best)}`:`M${x(r.i)},${y(best)}`); pts.push(r) });
+      if(path) path+=` H${x(maxI)}`;
+      el("path",{d:path,fill:"none",stroke:mm.c,"stroke-width":2,"stroke-linejoin":"round"},svg);
+      pts.forEach(r=>{const c=el("circle",{cx:x(r.i),cy:y(r.qps),r:3,fill:mm.c,stroke:"var(--surface)","stroke-width":1.5},svg);
+        const tip=`<b>${mm.name}</b> · #${r.i}<div class="m">${fmt(r.qps)} QPS</div><div class="d">${r.desc||"baseline"}</div>`;
+        c.addEventListener("mousemove",ev=>showTip(ev,tip));c.addEventListener("mouseleave",hideTip)});
+    });
+  });
+}
+
+// ---- Figure 3: rs620 fidelity ----
+function fig3(){
+  const host=document.getElementById("fig3"); host.innerHTML="";
+  const e="rs620", W=Math.max(300,host.clientWidth), H=240, m={l:46,r:8,t:12,b:30}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const y=v=>m.t+ih-(v/100)*ih, maxI=Math.max(...METHODS.flatMap(mm=>stats[e][mm.k].rows.map(r=>r.i)));
+  const x=i=>m.l+((i-1)/(maxI-1))*iw;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"rs620 fidelity per measurement"},host);
+  [0,25,50,75,100].forEach(v=>{el("line",{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),stroke:"var(--grid)"},svg);txt(svg,m.l-6,y(v)+4,v+"%",{"text-anchor":"end"})});
+  el("line",{x1:m.l,x2:W-m.r,y1:y(99),y2:y(99),stroke:"var(--ink2)","stroke-dasharray":"4 3"},svg);
+  txt(svg,W-m.r,y(99)-5,"99% required",{"text-anchor":"end"});
+  for(let i=1;i<=maxI;i+=5) txt(svg,x(i),H-10,i,{"text-anchor":"middle"});
+  txt(svg,W-m.r,H-10,"measurement #",{"text-anchor":"end",style:"fill:var(--ink3)"});
+  METHODS.forEach(mm=>stats[e][mm.k].rows.forEach(r=>{ if(r.fid==null) return;
+    const bad=r.fid<99, off=(METHODS.indexOf(mm)-1)*3;
+    const c=el("circle",{cx:x(r.i)+off,cy:y(Math.min(r.fid,100)),r:bad?4:3.2,fill:bad?"none":mm.c,stroke:mm.c,"stroke-width":bad?2:1.5},svg);
+    const tip=`<b>${mm.name}</b> · #${r.i}<div class="m">${r.fid.toFixed(1)}% sent</div><div class="d">reported ${fmt(r.qps)} QPS${bad?" · excluded":""}</div>`;
+    c.addEventListener("mousemove",ev=>showTip(ev,tip));c.addEventListener("mouseleave",hideTip)}));
+  const cap=document.createElement("p");cap.className="foot";cap.style.marginTop="8px";
+  cap.textContent="Filled dots met the 99% threshold; hollow dots did not. The rows at 25–26% were scored 2.3M to 3.0M QPS, a rate the load generator never actually sent.";
+  host.appendChild(cap);
+}
+
+// ---- Note, table, summaries ----
+function notes(){
+  const rs=stats.rs620, ex=METHODS.reduce((a,mm)=>a+rs[mm.k].excluded,0), top=Math.max(...METHODS.flatMap(mm=>rs[mm.k].rows.filter(r=>r.status==="ok").map(r=>r.qps)));
+  document.getElementById("note").innerHTML=`<b>rs620 caveat.</b> ${ex} of ${METHODS.reduce((a,mm)=>a+rs[mm.k].rows.length,0)} rs620 measurements fell below the 99% fidelity threshold, and the largest reported score (${fmt(top)} QPS) is an artifact: at that rate the load generator sent only about a quarter of the queries. The best valid rs620 result is 720k QPS, and many rows between 650k and 780k sit at 95–98% fidelity, which is about what one load generator can send. The server can likely do more, so treat the rs620 bars as lower bounds.`;
+}
+function table(){
+  let h=`<thead><tr><th>Machine</th><th>Search</th><th class="n">Best valid QPS</th><th class="n">First</th><th class="n">Change</th><th class="n">Runs</th><th class="n">Hours</th><th>What won</th></tr></thead><tbody>`;
+  ENVS.forEach(e=>METHODS.forEach(mm=>{ const s=stats[e][mm.k], b=s.best;
+    const ch=b&&s.first.qps?Math.round((b.qps/s.first.qps-1)*100):null;
+    const extra=[s.excluded?`${s.excluded} excluded`:"", s.failed?`${s.failed} failed`:""].filter(Boolean).join(", ");
+    h+=`<tr><td><b>${DATA[e].name}</b></td><td><span class="tag"><i class="sw" style="background:${mm.c}"></i>${mm.name}</span></td>
+      <td class="n">${b?fmt(b.qps):"–"}${e==="rs620"?" ≥":""}</td><td class="n">${fmt(s.first.qps)}</td><td class="n">${ch==null?"–":(ch>=0?"+":"")+ch+"%"}</td>
+      <td class="n">${s.rows.length}</td><td class="n">${s.hours.toFixed(1)}</td>
+      <td>${b?(b.desc||"baseline"):""}${extra?`<div class="flag">${extra}</div>`:""}</td></tr>`}));
+  document.getElementById("tbl").innerHTML=h+"</tbody>";
+  document.getElementById("sums").innerHTML=ENVS.flatMap(e=>METHODS.filter(mm=>mm.k!=="2_coordinate_descent").map(mm=>
+    `<details><summary>${DATA[e].name} · ${mm.name}: agent's written report</summary><pre>${DATA[e].searches[mm.k].summary.replace(/[&<]/g,c=>c==="&"?"&amp;":"&lt;")}</pre></details>`)).join("");
+}
+function draw(){fig1();fig2();fig3()}
+notes();table();draw();
+let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(draw,120)});
+</script>

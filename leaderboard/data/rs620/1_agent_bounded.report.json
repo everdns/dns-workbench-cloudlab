@@ -1,0 +1,23 @@
+{
+  "recommended_point_id": "udp-receive-buffer=67108864__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=ufw-off__rmem=268435456__netdev-max-backlog=default__netdev-budget=default__udp-mem=default__optmem-max=default__named-nofile=default",
+  "recommended_configuration": {
+    "udp-receive-buffer": 67108864,
+    "udp-send-buffer": 4194304,
+    "max-udp-size": 1232,
+    "udp-conntrack": "ufw-off",
+    "rmem": 268435456,
+    "netdev-max-backlog": "default",
+    "netdev-budget": "default",
+    "udp-mem": "default",
+    "optmem-max": "default",
+    "named-nofile": "default"
+  },
+  "recommended_max_qps_passed": 750000,
+  "summary": "RECOMMENDATION: udp-receive-buffer=64MB (67108864), rmem_max/default=256MB, udp-conntrack=ufw-off, all else default (udp-send-buffer 4MB, max-udp-size 1232, backlog/budget/udp-mem/optmem/nofile stock). Valid max sustainable QPS ~750k (vs 480k baseline, +56%).\n\nEVIDENCE for the winner (3 runs): 750k, [rep2 INVALID], 780k. rep2 reported 2.32M but is a load-generator artifact: fidelity was 25-48% at targets >=1.6M \u2014 the client actually delivered only ~770-780k qps regardless of target. It must not be used as a score. rep3's 780k is also partly client-limited (3 of 5 trials at 780k had fidelity 97.9-98.7%), but its 750k level had fidelity >=99.8% in every trial, as did rep1's. So I'm confident in >=750k; the server's true limit is at or above the client's ~780k ceiling and cannot be resolved with this load generator.\n\nWHAT LIMITS THE SERVER (from counters diffed around runs):\n1. Socket receive buffer (biggest factor). In every run all loss was UdpRcvbufErrors; zero softnet backlog drops, zero time_squeeze, no NIC ring drops, zero UdpSndbufErrors/UdpMemErrors. Stock rmem_max (212992) silently capped BIND's 4MB request: 480k. rmem 64MB + 16MB buffer: 650k. 64MB buffer + rmem 256MB: 690k (x3, very consistent). Larger buffers absorb named's transient drain stalls; failures near the knee were intermittent per-trial collapses (e.g. 96% answer rate) rather than gradual degradation.\n2. Netfilter/ufw per-packet cost. With 64MB buffers: ufw on (conntrack default) 690k x2; NOTRACK raw rule 690k; ufw-off 750k/780k (and 730k/720k in a combo run). NOTRACK alone gives nothing; the gain comes from removing ufw's filter-chain traversal on both input and output, which shares cores with named. Conntrack table size was never a problem.\n3. Beyond that, named's own CPU drain rate (~700-800k qps on this 2x8-core E5-2667v2) is the limit. RSS spreads softirq unevenly (4 CPUs get ~2x the packets of the others), which likely causes the per-socket bursts.\n\nNO EFFECT (tested): netdev_budget 600/4000 + netdev_max_backlog 30000 (690k, same as without). The combo of udp-mem raised, optmem 64K, nofile 1M, sndbuf 16MB, budget/backlog and ufw-off gave 730k/720k, no better than ufw-off alone. These knobs target counters that stayed at zero. max-udp-size was not varied: responses average ~94 bytes, so EDNS size is irrelevant to this workload.\n\nCONFIDENCE: High that the buffer + ufw-off configuration is best and gives ~750k+ (replicated; effects consistent in direction and size). Moderate on the exact figure, because it sits at the client's ceiling. If ufw must stay on in production, the 64MB/256MB buffer config with conntrack default gives a reliable 690k.\n\nNEXT STEPS: use more or stronger load-generator machines (the client saturates at ~780k) to find the true server limit. Then look at RSS/IRQ balance and named thread/CPU pinning (NUMA: the NIC IRQs sit on node 0), enlarge the NIC RX ring (currently 1024 of 4096), and check that named uses SO_REUSEPORT per-thread sockets.",
+  "measurements_used": 11,
+  "measurements_remaining": 9,
+  "best_so_far": {
+    "point_id": "udp-receive-buffer=67108864__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=ufw-off__rmem=268435456__netdev-max-backlog=default__netdev-budget=default__udp-mem=default__optmem-max=default__named-nofile=default__rep2",
+    "max_qps_passed": 2320000
+  }
+}

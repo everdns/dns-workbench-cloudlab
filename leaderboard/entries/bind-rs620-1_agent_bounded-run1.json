@@ -1,0 +1,89 @@
+{
+ "id": "bind-rs620-1_agent_bounded-run1",
+ "software": "bind",
+ "version": "",
+ "hardware": {
+  "name": "rs620"
+ },
+ "config": {
+  "search": "agent bounded",
+  "udp-receive-buffer": 4194304,
+  "udp-send-buffer": 4194304,
+  "max-udp-size": 1232
+ },
+ "metrics": {
+  "max_qps": 480000,
+  "lower_bound": true
+ },
+ "setup": [
+  {
+   "title": "Launch the CloudLab experiment (1 name server + 2 load generators)",
+   "commands": [
+    "python3 cloudlab_api/launch.py launch --name dns-rs620 --num-testers 2 --server-software bind --server-hw rs620 --tester-hw rs620",
+    "python3 cloudlab_api/launch.py wait <experiment_id>",
+    "python3 cloudlab_api/launch.py status <experiment_id>   # node ssh commands"
+   ]
+  },
+  {
+   "title": "On test_host_0: create an SSH key and authorize it on every node",
+   "commands": [
+    "ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N \"\" -q",
+    "cat ~/.ssh/id_ed25519.pub   # append this line to ~/.ssh/authorized_keys on NS_Local and test_host_1"
+   ]
+  },
+  {
+   "title": "On test_host_0: generate the zone and load it on the name server",
+   "commands": [
+    "cd /local/repository/optimization && bash optimization_setup.sh"
+   ]
+  },
+  {
+   "title": "On every load generator: receive replies on one RX queue (kxdpgun in generic mode reads queue 0 only)",
+   "commands": [
+    "sudo ethtool -X enp4s0f0np0 equal 1"
+   ]
+  },
+  {
+   "title": "Point the search config at this machine",
+   "commands": [
+    "client_interface: enp4s0f0np0   # in agent_search.yaml / grid_search.yaml",
+    "threads: 40",
+    "max_sustainable_qps: {num_trials: 5, min_passes: 4, trial_duration: 30}"
+   ]
+  },
+  {
+   "title": "Run the search (from test_host_0)",
+   "commands": [
+    "cd /local/repository/optimization && python3 agent_search.py --mode bounded --agent-backend claude-code --max-configs 20"
+   ]
+  }
+ ],
+ "optimize": [
+  {
+   "title": "bind configuration",
+   "commands": [
+    "sudo cp /etc/bind/named.conf.options /etc/bind/named.conf.options.orig",
+    "sudo sed -i -E '/^\\s*(udp-receive-buffer|udp-send-buffer|max-udp-size)\\s/d' /etc/bind/named.conf.options",
+    "sudo sed -i '0,/^};/s//    udp-receive-buffer 4194304;\\n};/' /etc/bind/named.conf.options",
+    "sudo sed -i '0,/^};/s//    udp-send-buffer 4194304;\\n};/' /etc/bind/named.conf.options",
+    "sudo sed -i '0,/^};/s//    max-udp-size 1232;\\n};/' /etc/bind/named.conf.options",
+    "sudo named-checkconf /etc/bind/named.conf"
+   ]
+  },
+  {
+   "title": "Restart the DNS service",
+   "commands": [
+    "sudo /local/repository/stop_dns_service.sh ns_bind",
+    "sudo /local/repository/start_dns_service.sh ns_bind"
+   ]
+  }
+ ],
+ "measured_with": {
+  "load generators": 1,
+  "tool": "kxdpgun (generic mode)",
+  "per level": "5 trials x 30 s",
+  "measurements in search": 11
+ },
+ "notes": "Lower bound. One load generator can send about 700k-780k QPS here, so the score is limited by the load generator, not necessarily by the name server. Measurements below 99% query fidelity are excluded.",
+ "date": "2026-10-09"
+}

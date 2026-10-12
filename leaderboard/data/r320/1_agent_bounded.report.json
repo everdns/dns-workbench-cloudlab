@@ -1,0 +1,23 @@
+{
+  "recommended_point_id": "udp-receive-buffer=16777216__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=default__rmem=16777216__netdev-max-backlog=default__netdev-budget=default__udp-mem=default__optmem-max=default__named-nofile=default",
+  "recommended_configuration": {
+    "udp-receive-buffer": 16777216,
+    "udp-send-buffer": 4194304,
+    "max-udp-size": 1232,
+    "udp-conntrack": "default",
+    "rmem": 16777216,
+    "netdev-max-backlog": "default",
+    "netdev-budget": "default",
+    "udp-mem": "default",
+    "optmem-max": "default",
+    "named-nofile": "default"
+  },
+  "recommended_max_qps_passed": 320000,
+  "summary": "RECOMMENDATION: rmem_max/rmem_default = 16 MB with BIND udp-receive-buffer = 16 MB; leave everything else at its starting value (udp-send-buffer 4 MB, max-udp-size 1232, ufw on, default backlog/budget/udp-mem/optmem/nofile). Measured twice: 320k and 310k max sustainable QPS. The baseline also scored 310k twice.\n\nHOW SURE: I'm confident this is as good as anything in the search space, but not that it beats the baseline at the score's 10k resolution. All 11 runs landed between 300k and 320k. Trials within a run agree to about \u00b10.2%. Between runs, the answer rate at the same load varies by about \u00b13\u20134% (for example 76.8% vs 72.4% answered at 400k for the same config), and that is larger than any difference between configs. The 320k result was a marginal pass (99.66% average answered against a 99% threshold) and did not repeat. I recommend raised rmem for one consistent reason: at 300k the stock 212 KB socket buffer (BIND's 4 MB request gets capped by rmem_max) lost 0.05\u20130.08% of queries to bursts in both baseline runs. Every config with a raised buffer answered 100% at 300k (16 MB in all four such runs, 64 MB also fine). That gives more headroom below saturation, but it does not raise the ceiling.\n\nWHAT LIMITS THE SERVER: named's CPU. It is a 16-thread Xeon E5-2450 at 2.1 GHz, using the mlx4 NIC with 16 RSS queues. Above about 310\u2013320k QPS the number of answers per second stays flat at about 290\u2013320k however much is offered: 400k \u2192 about 73\u201377% answered, 350k \u2192 about 87\u201391%. Every lost packet appeared as UdpRcvbufErrors (socket queue overflow, i.e. named not reading fast enough). The other loss points stayed clean: softnet backlog drops 0, NIC drops 0, IpInDiscards 0, UdpMemErrors and UdpSndbufErrors 0. Responses average about 94 bytes, so EDNS/max-udp-size has no effect.\n\nKnobs that made no measurable difference:\n- ufw-off and notrack (conntrack isn't dropping anything and its CPU cost is below the noise)\n- netdev_max_backlog 5000/30000 (RPS isn't used, so the backlog is never touched)\n- netdev-budget 3000/16000\n- udp-mem raised, optmem 64K, LimitNOFILE 1M, udp-send-buffer 16M\n- 64 MB buffers (harmless)\n\nnetdev-budget 600/4000 is slightly harmful: its 4 ms limit is below this host's 8 ms base budget_usecs, it doubled time_squeeze, and it cost about 1\u20132%. The all-knobs bundle (notrack, EDNS 4096, budget 600/4000, 64 MB rmem and the rest) scored 300k. The 64 MB part was cleared separately, so that dip comes from the 600/4000 budget plus noise.\n\nI stopped with 9 measurements left. All the kernel-level hypotheses were tested and none can move a CPU-bound ceiling, so more runs would only resample noise at the 310/320k boundary.\n\nWHAT TO TRY NEXT (outside this search space): give named more CPU per query or spread the load better.\n- Interrupt balance: several CPUs (2, 8, 10, 13, 15) each serve two mlx4 queues while CPUs 0, 1, 3, 12 and 14 serve none, so pin the IRQs one-to-one.\n- Check named's worker thread count (-n) and that SO_REUSEPORT is spreading load.\n- Turn off CPU frequency scaling (min 1.2 GHz) and SMT effects.\n- Disable query logging/statistics overhead, and consider faster hardware or a different authoritative server (Knot, NSD) for higher QPS.",
+  "measurements_used": 11,
+  "measurements_remaining": 9,
+  "best_so_far": {
+    "point_id": "udp-receive-buffer=16777216__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=default__rmem=16777216__netdev-max-backlog=default__netdev-budget=default__udp-mem=default__optmem-max=default__named-nofile=default",
+    "max_qps_passed": 320000
+  }
+}

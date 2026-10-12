@@ -1,0 +1,29 @@
+{
+  "recommended_point_id": "rbuf16M-perfgov-irq1percore__e1410e96f3",
+  "recommended_change": {
+    "label": "rbuf16M-perfgov-irq1percore",
+    "named_options": [
+      "udp-receive-buffer 16777216;",
+      "udp-send-buffer 16777216;"
+    ],
+    "host_commands": [
+      "sysctl -w net.core.rmem_max=67108864 net.core.wmem_max=67108864 net.core.rmem_default=16777216 net.core.wmem_default=16777216",
+      "for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > $g; done",
+      "for s in /sys/devices/system/cpu/cpu*/cpuidle/state[2-9]/disable; do [ -e $s ] && echo 1 > $s; done; true",
+      "systemctl stop irqbalance",
+      "for q in $(seq 0 15); do irq=$(grep -E \"enp4s0f0np0-$q\\$\" /proc/interrupts | awk -F: '{print $1}' | tr -d ' '); echo $q > /proc/irq/$irq/smp_affinity_list; done",
+      "systemctl restart named"
+    ],
+    "revert_commands": [],
+    "reboot_after_apply": false
+  },
+  "recommended_apply_script": "#!/bin/bash\n# rbuf16M-perfgov-irq1percore\nset -e\n\n# Add to the options block of /etc/bind/named.conf.options:\n#     udp-receive-buffer 16777216;\n#     udp-send-buffer 16777216;\n\nsysctl -w net.core.rmem_max=67108864 net.core.wmem_max=67108864 net.core.rmem_default=16777216 net.core.wmem_default=16777216\nfor g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > $g; done\nfor s in /sys/devices/system/cpu/cpu*/cpuidle/state[2-9]/disable; do [ -e $s ] && echo 1 > $s; done; true\nsystemctl stop irqbalance\nfor q in $(seq 0 15); do irq=$(grep -E \"enp4s0f0np0-$q\\$\" /proc/interrupts | awk -F: '{print $1}' | tr -d ' '); echo $q > /proc/irq/$irq/smp_affinity_list; done\nsystemctl restart named\n",
+  "recommended_max_qps_passed": 3000000,
+  "summary": "RECOMMENDATION: rbuf16M-perfgov-irq1percore (no reboot needed)\n  named_options: udp-receive-buffer 16777216; udp-send-buffer 16777216;\n  host: rmem_max/wmem_max=64MB, rmem_default/wmem_default=16MB; performance governor; disable C-states >= C2; stop irqbalance; pin the 16 sfc RX queue IRQs one per physical core (enp4s0f0np0-q -> CPU q, q=0..15; CPU q and q+16 are HT siblings); restart named.\n\nRESULT: baseline 430k QPS -> the configuration answers 99.6-99.99% at the load generator's maximum send rate. The harness shows 3,000,000 (ceiling hit), but that number is not a server measurement: the kxdpgun client can only send ~780k QPS (fidelity 97-99.9% at an 800k target, ~49% at 1.6M, ~26% at 3M). The honest statement is: server sustains >= ~780k QPS (the client limit), versus 430k at baseline (>= 1.8x). Its real limit is above what this client can generate.\n\nCONFIDENCE: high. 3 valid runs of the same config (e1410e96f3, rep2, rep4) all passed every level up to the client limit (answer rate 99.64-99.99%). One repeat (rep3) gave ~0% answers at every rate, but server counters showed it received and replied to every query (UdpInDatagrams == UdpOutDatagrams = 12.6M, 0 rcvbuf errors, dig correct). That run came right after the reboot-based measurement, so I attribute it to a client/path glitch after the link bounced, not to the config. The next repeat passed again.\n\nWHAT LIMITS THIS SERVER (2x8-core Ivy Bridge E5-2667v2 with HT, Solarflare sfc 10G with 16 RSS queues, BIND 9.20 with 32 reuseport worker threads):\n- Losses were almost entirely UDP socket receive-buffer overflows (UdpRcvbufErrors). There were no softnet backlog drops and negligible NIC drops.\n- With reuseport every thread gets 1/32 of the queries, so the SLOWEST thread sets the limit. irqbalance had stacked 2 queues each on CPUs 4/20/24/30, all on NUMA node0, so the named threads sharing those CPUs fell behind.\n- Ablations: buffers + governor alone gave 700k; IRQ spread alone gave 720k; both together reached the client limit. So both short-term absorption and per-core load balance matter.\n- reuseport no (one shared socket) is disastrous: 80k QPS, due to lock contention. Keep reuseport on.\n- mitigations=off (kernel cmdline, reboot) on top of the best config raised the answer rate at the client limit to a steady 99.97-99.99% (1 run). That means more CPU headroom (PTI is costly for syscall-heavy UDP on this CPU). The measured score is the same and it has a security cost, so I don't recommend it by default. It's an option if more margin is needed.\n\nNOTES: the restore removed everything (the grub cmdline and kernel 5.15.0-187 came back correctly). The only residue is the inet_diag module, loaded by my `ss` inspection. It can't be unloaded while in use and is harmless.\n\nNEXT STEPS: use a stronger or second load-generator client to find the server's true limit, then evaluate mitigations=off, pinning named threads away from the softirq CPUs, and RX ring 4096 with real headroom data.",
+  "measurements_used": 9,
+  "measurements_remaining": 11,
+  "best_so_far": {
+    "point_id": "rbuf16M-perfgov-irq1percore__e1410e96f3",
+    "max_qps_passed": 3000000
+  }
+}

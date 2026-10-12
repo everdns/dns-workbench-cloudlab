@@ -1,0 +1,23 @@
+{
+  "recommended_point_id": "udp-receive-buffer=67108864__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=ufw-off__rmem=268435456__netdev-max-backlog=30000__netdev-budget=3000_16000__udp-mem=raised__optmem-max=65536__named-nofile=1048576",
+  "recommended_configuration": {
+    "udp-receive-buffer": 67108864,
+    "udp-send-buffer": 4194304,
+    "max-udp-size": 1232,
+    "udp-conntrack": "ufw-off",
+    "rmem": 268435456,
+    "netdev-max-backlog": 30000,
+    "netdev-budget": "3000/16000",
+    "udp-mem": "raised",
+    "optmem-max": 65536,
+    "named-nofile": 1048576
+  },
+  "recommended_max_qps_passed": 200000,
+  "summary": "RECOMMENDATION: udp-receive-buffer=64M, udp-send-buffer=4M, max-udp-size=1232, udp-conntrack=ufw-off, rmem=256M, udp-mem=raised, netdev-max-backlog=30000, netdev-budget=3000/16000, optmem-max=65536, named-nofile=1048576.\nMeasured 3 times: 200k, 190k, 190k (200k-level answer rates 99.45 / 99.27 / 98.73%). I am confident the sustainable rate is about 190k QPS, up 27% from the 150k baseline. Treat 200k as an occasional lucky pass, not the expected result. A simpler variant with the same essentials (64M BIND buffer, rmem 256M, udp-mem raised, ufw-off, all other knobs at default) measured 190k twice. So backlog, budget, optmem and nofile are not proven to help; they are harmless and showed a slightly better answer rate at 200k, within noise.\n\nWHAT LIMITS THE SERVER\n- Hardware: an old 4-core/8-thread Xeon E5530. DNS traffic arrives on eno4.\n- Where packets are lost: almost all loss is UdpRcvbufErrors, meaning named's sockets overflow. There were no softnet backlog drops, no time_squeeze, only negligible NIC rx_missed, and zero UdpMemErrors and SndbufErrors.\n- RX on one CPU: nearly all RX softirq runs on CPU7 (softnet \"processed\"), which suggests RSS puts all of this traffic on one queue (eno4-2).\n- The underlying limit is named's CPU throughput, roughly 185-195k QPS. Past it, loss grows smoothly: about 97% answered at 210k, 90% at 250k, 57% at 400k.\n\nWHAT HELPED, IN ORDER\n1. Letting the socket buffers be large. With stock rmem_max (212992) the 4M BIND buffer is capped. rmem 16M plus a 16M buffer gave 160k; 64M gave 180k, reproduced twice.\n2. Raising udp_mem (udp-mem=raised). With 64M (doubled by the kernel) buffers across many sockets, default udp_mem pressure (about 1.5 GB) limits queueing. With rmem 256M: udp-mem raised gave 190k twice (190k answered 99.88% and 99.86%); default udp-mem gave 180k (190k at 98.49%). The drops showed up as RcvbufErrors, not MemErrors. The deeper queues absorb transient overload; they do not add capacity.\n3. Turning ufw off. ufw-off beat both default and notrack. Notrack in the best setup gave 180k (190k at 98.5%), so the ufw rule chains themselves cost CPU on this machine, not just conntrack. If a firewall is required, notrack is the next best choice, at about 5% lower.\n\nNO MEASURABLE EFFECT\n- netdev-budget alone (200k once, then 180k on repeat), netdev_max_backlog (no RPS, so the backlog is unused), optmem, nofile.\n- max-udp-size and udp-send-buffer: responses average about 94 bytes on the wire and there were no SndbufErrors.\n\nNOISE\nSingle runs vary by about \u00b110k (one level), because the pass rule needs 4 of 5 trials at \u226599% and the configurations sit right at that edge.\n\nNEXT STEPS (outside this search space)\n- Spread RX over several CPUs: fix RSS hashing to include UDP ports (ethtool -N rx-flow-hash udp4 sdfn), or enable RPS.\n- Keep named threads off the softirq CPU, or tune BIND's thread count and affinity.\n- Enlarge the NIC RX rings (currently 255, max 2040).\nThese target the CPU and single-queue limit that the sysctl knobs can't address.",
+  "measurements_used": 14,
+  "measurements_remaining": 6,
+  "best_so_far": {
+    "point_id": "udp-receive-buffer=67108864__udp-send-buffer=4194304__max-udp-size=1232__udp-conntrack=ufw-off__rmem=67108864__netdev-max-backlog=default__netdev-budget=3000_16000__udp-mem=default__optmem-max=default__named-nofile=default",
+    "max_qps_passed": 200000
+  }
+}

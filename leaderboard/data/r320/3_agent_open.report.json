@@ -1,0 +1,27 @@
+{
+  "recommended_point_id": "coal128-irqpin1to1__df08b9b4b7__rep2",
+  "recommended_change": {
+    "label": "coal128-irqpin1to1",
+    "named_options": [
+      "udp-receive-buffer 16777216;"
+    ],
+    "host_commands": [
+      "ethtool -C enp8s0d1 adaptive-rx off rx-usecs 128 rx-frames 256 tx-usecs 64 tx-frames 64",
+      "ethtool -K enp8s0d1 gro off",
+      "sysctl -w net.core.rmem_max=16777216 net.core.rmem_default=16777216",
+      "c=0; for i in $(grep -E 'mlx4-(1[7-9]|2[0-9]|3[0-2])@' /proc/interrupts | awk -F: '{print $1}'); do echo $c > /proc/irq/$i/smp_affinity_list; c=$((c+1)); done",
+      "grep -E 'mlx4-(1[7-9]|2[0-9]|3[0-2])@' /proc/interrupts | awk -F: '{print $1}' | while read i; do cat /proc/irq/$i/effective_affinity_list; done | tr '\\n' ' '"
+    ],
+    "revert_commands": [],
+    "reboot_after_apply": false
+  },
+  "recommended_apply_script": "#!/bin/bash\n# coal128-irqpin1to1\nset -e\n\n# Add to the options block of /etc/bind/named.conf.options:\n#     udp-receive-buffer 16777216;\n\nethtool -C enp8s0d1 adaptive-rx off rx-usecs 128 rx-frames 256 tx-usecs 64 tx-frames 64\nethtool -K enp8s0d1 gro off\nsysctl -w net.core.rmem_max=16777216 net.core.rmem_default=16777216\nc=0; for i in $(grep -E 'mlx4-(1[7-9]|2[0-9]|3[0-2])@' /proc/interrupts | awk -F: '{print $1}'); do echo $c > /proc/irq/$i/smp_affinity_list; c=$((c+1)); done\ngrep -E 'mlx4-(1[7-9]|2[0-9]|3[0-2])@' /proc/interrupts | awk -F: '{print $1}' | while read i; do cat /proc/irq/$i/effective_affinity_list; done | tr '\\n' ' '\n",
+  "recommended_max_qps_passed": 400000,
+  "summary": "RECOMMENDATION: coal128-irqpin1to1 (400k QPS, baseline 320k, +25%).\nConfiguration:\n- `ethtool -C enp8s0d1 adaptive-rx off rx-usecs 128 rx-frames 256 tx-usecs 64 tx-frames 64`\n- `ethtool -K enp8s0d1 gro off`\n- `net.core.rmem_max/rmem_default=16 MB` plus `udp-receive-buffer 16777216;`\n- mlx4 RX-queue IRQ i (mlx4-17..32) pinned to CPU i.\nExpected: about 395-400k. This 128 \u00b5s family was measured 5 times: 390k, 400k, 400k (mitigations=off, about the same), 390k (32 threads) and 390k (before pinning). Its 200k level never dropped below 99.99%.\n\nWHY NOT THE TOP SCORE: rx-usecs 256 (plus irqbalance and collectl stopped, THP=always, 16 MB send buffers) reached 420k twice and 410k four times. It is bimodal, though. At the 200k level it sits right at the edge (99.4-99.7%) and fell below 99% twice: 190k in the final repeat, 160k in the earlier 256 \u00b5s run. The binary search then never tries 400k. Its expected score (about 375k) is below the 128 \u00b5s config. If you can accept that risk, rx256-pin-noirqbal-nocollectl-thp is about 4% higher at peak. The 128 \u00b5s config plus stopping irqbalance/collectl was never measured on its own. It is the natural next candidate.\n\nWHAT LIMITS THE SERVER: CPU in BIND's userspace code. Hardware: Xeon E5-2450 Sandy Bridge, 8 cores / 16 threads at 2.1 GHz, turbo locked off in the BIOS (writing no_turbo fails). Near saturation, all 16 named worker threads ran at about 90% CPU: about 65% user, 18% sys, 9% softirq.\n- Losses at overload are all UDP RcvbufErrors. There were no NIC drops and no softnet drops or squeezes.\n- Above about 420k, extra load converts directly to drops. Answered throughput is capped at about 425k QPS (800k offered gives about 50% answered).\n- The only big lever was interrupt coalescing (adaptive \u2192 fixed 64 \u2192 128 \u2192 256 \u00b5s gave 320 \u2192 350 \u2192 390-400 \u2192 410-420k). Fewer interrupts preempt named, and its receive calls get bigger batches.\n\nNO EFFECT OR WORSE:\n- Socket buffers, performance governor and disabling deep C-states (310k).\n- mitigations=off (400k vs 390-400k).\n- 32 worker threads (390k).\n- zone-statistics no, dnssec-validation no, notify no (410k).\n- TX coalescing 128 (420k, same as 64).\n- `reuseport no` was much worse (250k).\n- ufw and conntrack are not active here.\n\nMEASUREMENT CAVEATS:\n(1) Three runs returned 0% answers, each the first run after a server reboot. In every case the server had received and answered all 12.6M queries: UDP in = out, NIC physical TX = RX, no drops. The fault is on the client or measurement side. Separately, the testbed's boot script runs `apt upgrade`, reinstalls bind9 and restarts named, so reboot-based tests (kernel command line) are unreliable here.\n(2) In the 190k run the server answered every query it received with zero drops at any layer. The low-rate losses in the 256 \u00b5s configs therefore happen outside the server, apparently on the client's receive side reacting to the burstier reply timing.\nNo residual drift was reported.\n\nNEXT STEPS: measure 128 \u00b5s coalescing with irqbalance/collectl stopped; try rx-usecs about 192; fix the client-side reboot glitch before testing kernel command-line changes. Beyond that, the only large gains would come from more or faster cores, or a lighter DNS server.",
+  "measurements_used": 20,
+  "measurements_remaining": 0,
+  "best_so_far": {
+    "point_id": "rx256-pin-noirqbal-nocollectl-thp__aad266efdc",
+    "max_qps_passed": 420000
+  }
+}
