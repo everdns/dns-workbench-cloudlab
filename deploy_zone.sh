@@ -12,6 +12,7 @@ REMOTE_REPO=/local/repository
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 python3 "$SCRIPT_DIR/zone_generation/zone_generator.py" \
+    --config "$SCRIPT_DIR/zone_generation/config.json" \
     --base-subnet 10.0.0.0 --num-records 65536 --num-ips 65536 \
     --max-records-per-file 65536 --out-dir "$OUT_DIR"
 
