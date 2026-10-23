@@ -86,6 +86,7 @@ sudo ./dns_responder -i <interface> [options]
 | `-o, --output FILE` | Write stats to file | stdout only |
 | `-z, --zerocopy` | Force zero-copy mode | — |
 | `-Z, --no-zerocopy` | Force copy mode | — |
+| `-S, --skb` | Attach XDP in generic (SKB) mode, skipping native. Needed on mlx4_en, which attaches natively but drops redirected packets | off |
 | `-b, --batch-size N` | RX/TX batch size | 64 |
 | `-f, --frame-count N` | UMEM frames per queue | 4096 |
 | `-t, --timestamps FILE` | Write per-packet RX timestamps (ns) to file | — |

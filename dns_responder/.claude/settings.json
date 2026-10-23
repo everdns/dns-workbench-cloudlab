@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/calvin/knot-dns/src/utils/kxdpgun/**)",
+      "Read(//home/calvin/knot-dns/src/**)",
+      "Bash(find /home/calvin/knot-dns/src -name *xdp* -o -name *xsk*)"
+    ]
+  }
+}

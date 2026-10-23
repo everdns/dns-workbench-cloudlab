@@ -44,6 +44,7 @@ struct config {
 	int  ts_range;            /* track min/max timestamps for QPS */
 	int  nxdomain;            /* always return NXDOMAIN (fast path) */
 	int  count_only;          /* count packets only, don't respond */
+	int  skb_mode;            /* attach in generic (SKB) mode, skip native */
 };
 
 static void config_defaults(struct config *cfg)
@@ -81,6 +82,8 @@ static void usage(const char *prog)
 	"  -T, --ts-range           Track min/max RX timestamps for actual QPS\n"
 		"  -N, --nxdomain           Always return NXDOMAIN (fast path, minimal stats)\n"
 		"  -C, --count-only         Count packets only, don't respond (ultra-fast)\n"
+		"  -S, --skb                Attach XDP in generic (SKB) mode. Needed on drivers that\n"
+		"                           attach natively but cannot redirect to AF_XDP (e.g. mlx4_en)\n"
 		"  -x, --xdp-prog FILE      Path to XDP object file\n"
 		"  -v, --verbose            Print per-thread stats\n"
 		"  -h, --help               Show this help\n",
@@ -102,6 +105,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		{ "no-zerocopy", no_argument,       NULL, 'Z' },
 		{ "batch-size",  required_argument, NULL, 'b' },
 		{ "frame-count", required_argument, NULL, 'f' },
+		{ "skb",         no_argument,       NULL, 'S' },
 		{ "xdp-prog",   required_argument, NULL, 'x' },
 		{ "verbose",     no_argument,       NULL, 'v' },
 		{ "help",        no_argument,       NULL, 'h' },
@@ -109,7 +113,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TNCzZb:f:x:vh",
+	while ((opt = getopt_long(argc, argv, "i:q:d:o:t:TNCzZSb:f:x:vh",
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -143,6 +147,9 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 			break;
 		case 'Z':
 			cfg->zerocopy = 0;
+			break;
+		case 'S':
+			cfg->skb_mode = 1;
 			break;
 		case 'b':
 			cfg->batch_size = atoi(optarg);
@@ -200,7 +207,7 @@ static int detect_queue_count(const char *ifname)
  */
 static int load_xdp_program(const char *path, const char *ifname,
 			    struct bpf_object **obj_out, int *xsks_map_fd,
-			    uint32_t *xdp_flags_used)
+			    uint32_t *xdp_flags_used, int force_skb)
 {
 	struct bpf_object *obj;
 	struct bpf_program *prog;
@@ -248,10 +255,12 @@ static int load_xdp_program(const char *path, const char *ifname,
 
 	*xsks_map_fd = bpf_map__fd(map);
 
-	/* Attach XDP program in DRV mode (native), fallback to SKB */
-	ret = bpf_set_link_xdp_fd(ifindex, prog_fd, XDP_FLAGS_DRV_MODE);
+	/* Attach XDP program in DRV mode (native), fallback to SKB. Some drivers
+	 * (mlx4_en) accept a native attach but drop XDP_REDIRECT, so --skb skips it. */
+	ret = force_skb ? -1 : bpf_set_link_xdp_fd(ifindex, prog_fd, XDP_FLAGS_DRV_MODE);
 	if (ret) {
-		fprintf(stderr, "WARNING: native XDP attach failed, trying SKB mode\n");
+		if (!force_skb)
+			fprintf(stderr, "WARNING: native XDP attach failed, trying SKB mode\n");
 		ret = bpf_set_link_xdp_fd(ifindex, prog_fd, XDP_FLAGS_SKB_MODE);
 		if (ret) {
 			fprintf(stderr, "ERROR: XDP attach failed: %s\n",
@@ -343,7 +352,7 @@ int main(int argc, char **argv)
 	uint32_t xdp_flags = 0;
 	fprintf(stderr, "Loading XDP program from %s...\n", cfg.xdp_prog_path);
 	if (load_xdp_program(cfg.xdp_prog_path, cfg.ifname,
-			     &bpf_obj, &xsks_map_fd, &xdp_flags) < 0)
+			     &bpf_obj, &xsks_map_fd, &xdp_flags, cfg.skb_mode) < 0)
 		goto cleanup;
 
 	fprintf(stderr, "XDP program attached to %s (%s mode)\n", cfg.ifname,
