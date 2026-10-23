@@ -226,6 +226,16 @@ def get_clients(config):
     return list(clients)
 
 
+def client_interface_for(config, host):
+    """Network interface kxdpgun uses on ``host``.
+
+    ``client_interfaces`` (host -> interface) overrides the global
+    ``client_interface`` for hosts whose NIC names differ.
+    """
+    per_host = config.get("client_interfaces") or {}
+    return per_host.get(host, config.get("client_interface"))
+
+
 def split_qps(total_qps, n):
     """Split a target QPS evenly across ``n`` hosts.
 
@@ -949,7 +959,9 @@ def run_trial(config, params, qps, trial, trial_store):
         host_cmds = {}
         for host, share in zip(clients, shares):
             tool.validate_params(config, share)
-            host_cmds[host] = tool.build_command(config, share)
+            host_config = {**config,
+                           "client_interface": client_interface_for(config, host)}
+            host_cmds[host] = tool.build_command(host_config, share)
     except Exception as e:
         log.error("Failed to build %s command at %d QPS trial %d: %s",
                   tool.name, qps, trial + 1, e)
