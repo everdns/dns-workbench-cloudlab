@@ -216,8 +216,11 @@ def append_row(summary_csv, row):
 def benchmark_config(base_cfg):
     """Harness config: agent_search.yaml minus agent/parameters, with our start/stop."""
     cfg = {k: base_cfg[k] for k in (
-        "hosts", "client_interface", "input_file", "dns_service", "tool", "threads",
+        "hosts", "input_file", "dns_service", "tool", "threads",
         "ports_per_thread", "timeout", "pause_between_runs", "max_sustainable_qps")}
+    for key in ("client_interface", "client_interfaces"):
+        if key in base_cfg:
+            cfg[key] = base_cfg[key]
     cfg["dns_services"] = {"start_script": f"{REMOTE_DIR}/start_version.sh",
                            "stop_script": f"{REMOTE_DIR}/stop_version.sh"}
     return cfg
